@@ -137,10 +137,27 @@ try {
     mkdirSync(dirname(OUT), { recursive: true })
     await page.screenshot({ path: OUT.replace(/\.png$/, '-throw.png') })
 
+    // The dice stop and the crew starts working: the call goes up, the amounts
+    // float off the bets they belong to, and nothing on the felt has moved yet
+    // because what is on the felt is what is being paid.
+    await page.locator('.call.is-call').waitFor({ timeout: 15000 })
+    check('the stickman calls the number', ((await table.say()) ?? '').trim().length > 0, (await page.locator('.call').textContent()).trim())
+    check('the dice stay where they landed', (await page.locator('.thrown').count()) === 2)
+    await page.waitForTimeout(200)
+    check('amounts float off the bets they belong to', (await page.locator('.float').count()) > 0)
+    // And off the bets, not off the corner of the table.
+    const floated = await page.evaluate(() => {
+      const frame = document.querySelector('.felt-frame').getBoundingClientRect()
+      return [...document.querySelectorAll('.float')].every((f) => {
+        const b = f.getBoundingClientRect()
+        return b.width > 0 && b.x - frame.x > 40 && b.y - frame.y > 20
+      })
+    })
+    check('and they are over the felt, not stuck in the corner', floated)
+    await page.screenshot({ path: OUT.replace(/\.png$/, '-settle.png') })
+
     await page.locator('.roll:not([disabled])').waitFor({ timeout: 15000 })
     await page.waitForTimeout(30)
-    check('the stickman calls the roll', ((await table.say()) ?? '').trim().length > 0, (await table.say()).trim())
-    check('the dice stay on the felt afterwards', (await page.locator('.thrown').count()) === 2)
 
     // Where they came to rest has to be inside the tray. A die that finished
     // under the prop box would mean the walls are in the wrong place.

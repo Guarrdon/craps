@@ -67,6 +67,10 @@ body {
    frame, which is what lets the dice be positioned as percentages of it. */
 .felt-frame {
   position: relative;
+  /* Everything laid over the cloth - the dice, the call, the total - is sized
+     and placed in hundredths of the table. One container, so a percentage of
+     it means the same thing to all of them. */
+  container-type: size;
   aspect-ratio: 1500 / 860;
   width: min(100%, calc((100cqh - 2px) * 1500 / 860));
   max-width: 100%;
@@ -391,6 +395,15 @@ body {
 .stack {
   pointer-events: all;
   cursor: pointer;
+  /* Chips are set down, not conjured. The element is keyed on its amount, so
+     this replays whenever a pile changes - which is exactly when a dealer
+     would have restacked it. */
+  animation: chips-down 260ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+}
+
+@keyframes chips-down {
+  from { opacity: 0; transform: translateY(-16px) scale(1.1); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .stack-shadow {
@@ -431,6 +444,12 @@ body {
 }
 
 /* ------------------------------------------------------------------- puck */
+
+/* The dealer slides it. A puck that teleports to the point is the single
+   clearest tell that nobody is working this table. */
+.puck {
+  transition: transform 620ms cubic-bezier(0.22, 0.9, 0.3, 1);
+}
 
 .puck circle {
   fill: #14100c;
@@ -475,10 +494,6 @@ body {
   inset: 0;
   pointer-events: none;
   perspective: 1400px;
-  /* The layer fills the felt exactly, so 1cqw here is a hundredth of the
-     table's width - which is what lets a die be sized and its faces pushed
-     apart in the same unit as its position. */
-  container-type: size;
 }
 
 .thrown {
@@ -513,6 +528,107 @@ body {
   border-radius: 50%;
   background: radial-gradient(ellipse, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0) 72%);
   pointer-events: none;
+}
+
+/* -------------------------------------------------------------- the crew */
+
+/* Amounts rising off the bets they belong to, staggered in the order the crew
+   works the layout: the centre first, then the box, then the come, then the
+   line. The delay comes from the event order, so what you watch is the order
+   it actually happened in. */
+.payouts {
+  pointer-events: none;
+}
+
+.float {
+  animation: float-up 1150ms cubic-bezier(0.16, 0.8, 0.3, 1) backwards;
+  opacity: 0;
+}
+
+.float text {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 4;
+  paint-order: stroke;
+}
+
+.float.is-pay text { fill: #7ff0a4; }
+.float.is-take text { fill: #ff8b8b; }
+.float.is-push text,
+.float.is-return text { fill: #f4ece0; }
+
+@keyframes float-up {
+  0% { opacity: 0; transform: translateY(6px) scale(0.86); }
+  18% { opacity: 1; transform: translateY(-6px) scale(1.06); }
+  62% { opacity: 1; transform: translateY(-24px) scale(1); }
+  100% { opacity: 0; transform: translateY(-46px) scale(1); }
+}
+
+/* The call and the total, in the one corner of this layout with nothing
+   printed on it - under the prop box, right of the pass line. */
+.readout {
+  position: absolute;
+  right: 2%;
+  bottom: 2.5%;
+  display: flex;
+  align-items: center;
+  flex-direction: row-reverse;
+  gap: 1.2cqw;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  pointer-events: none;
+}
+
+.call {
+  padding: 0.7cqw 1.3cqw;
+  border-radius: 999px;
+  background: rgba(10, 4, 4, 0.84);
+  border: 1px solid rgba(244, 236, 224, 0.2);
+  backdrop-filter: blur(4px);
+  font-size: clamp(11px, 1.32cqw, 20px);
+  letter-spacing: 0.01em;
+  animation: call-in 320ms ease backwards;
+  text-align: right;
+  max-width: 40cqw;
+}
+
+.call.is-refused {
+  border-color: rgba(226, 59, 63, 0.6);
+  color: #ffd4d4;
+}
+
+.call.is-call {
+  border-color: rgba(233, 200, 119, 0.5);
+  color: #fff3d6;
+  font-weight: 600;
+}
+
+@keyframes call-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: call-in 320ms ease backwards;
+}
+
+.total-n {
+  font-size: clamp(22px, 3.2cqw, 50px);
+  font-weight: 700;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.total-how {
+  font-size: clamp(8px, 0.98cqw, 14px);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--print-dim);
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- ledger */

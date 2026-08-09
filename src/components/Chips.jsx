@@ -116,7 +116,10 @@ export function ChipStack({
 export function Puck({ point }) {
   const [x, y] = point ? PUCK.on[point] : PUCK.off
   return (
-    <g className={`puck${point ? ' is-on' : ''}`} transform={`translate(${x} ${y})`}>
+    // Positioned through the style rather than the transform attribute, so the
+    // move from OFF to the point number is something you watch the dealer do
+    // rather than something that has already happened.
+    <g className={`puck${point ? ' is-on' : ''}`} style={{ transform: `translate(${x}px, ${y}px)` }}>
       <circle r={PUCK.r} />
       <circle r={PUCK.r * 0.78} className="puck-ring" />
       <text y={PUCK.r * 0.28} textAnchor="middle" fontSize={PUCK.r * (point ? 0.62 : 0.5)}>

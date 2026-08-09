@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import Felt from './components/Felt.jsx'
 import Rail from './components/Rail.jsx'
 import Dice from './components/Dice.jsx'
+import { Payouts, Readout, settlingTime } from './components/Crew.jsx'
 import { ChipStack, Puck } from './components/Chips.jsx'
 import { betDef, isWorking } from './lib/bets.js'
 import { OPENING_RAIL, money } from './lib/bank.js'
@@ -36,6 +37,10 @@ export default function App() {
   // table until the stickman pushes them back.
   const [throwing, setThrowing] = useState(null)
   const [resting, setResting] = useState(null)
+  // The crew working the felt after a throw: the events, spread over about a
+  // second. Until this clears, the table shows what is being paid rather than
+  // what it will look like afterwards.
+  const [settling, setSettling] = useState(null)
 
   // The house's own source, made once and never seeded. Nothing about how the
   // table is played may reach it.
@@ -138,7 +143,7 @@ export default function App() {
   }, [state.bets])
 
   const onRoll = useCallback(() => {
-    if (throwing) return
+    if (throwing || settling) return
     // The shooter has to have a line bet. It is the one rule about who may
     // throw, and it is why the come-out is the only time the line is open.
     if (state.phase === 'come-out' && !state.bets.pass && !state.bets.dontpass) {
@@ -158,23 +163,40 @@ export default function App() {
     setSay({ kind: 'throw', text: 'Dice are out.' })
     setLedger(null)
     setThrowing({ ...thrown, roll })
-  }, [state, throwing])
+  }, [state, throwing, settling])
 
-  // Nothing is settled until the dice have stopped, the way nothing is settled
-  // at a table until they have. The result was decided before they left the
-  // shooter's hand, but the felt does not move until everyone has seen it.
+  /*
+   * The dice have stopped.
+   *
+   * Nothing on the felt moves yet. The stickman calls the number, and then the
+   * crew works the layout in order - which takes about a second and is the
+   * whole difference between a payout and a number changing. The bets stay
+   * exactly as they were while it happens, because that is what is being paid.
+   */
   const onLanded = useCallback(() => {
     if (!throwing) return
     const { roll } = throwing
     // Resolved here as well as in the reducer, to find out what to say about
     // it. The reducer is pure, so the two cannot disagree.
     const next = reducer(state, { type: 'roll', roll })
-    dispatch({ type: 'roll', roll })
-    setSay({ kind: 'call', text: callFor(roll, next.lastEvents ?? []) })
-    setLedger({ roll, ...ledgerFor(next.lastEvents ?? []) })
+    const events = next.lastEvents ?? []
+    setSay({ kind: 'call', text: callFor(roll, events) })
     setResting(throwing.resting)
     setThrowing(null)
+    setSettling({ roll, events })
   }, [state, throwing])
+
+  // And once the crew has finished, the felt catches up: bets come down, the
+  // puck moves, the markers light.
+  useEffect(() => {
+    if (!settling) return undefined
+    const timer = setTimeout(() => {
+      dispatch({ type: 'roll', roll: settling.roll })
+      setLedger({ roll: settling.roll, ...ledgerFor(settling.events) })
+      setSettling(null)
+    }, settlingTime(settling.events))
+    return () => clearTimeout(timer)
+  }, [settling])
 
   return (
     <div className="game">
@@ -189,7 +211,10 @@ export default function App() {
               const [x, y] = chipAt(id)
               return (
                 <ChipStack
-                  key={id}
+                  // Keyed on the amount as well as the spot, so a pile that
+                  // changes is set down again rather than silently becoming a
+                  // different number of chips.
+                  key={`${id}:${bet.amount}`}
                   id={id}
                   x={x}
                   y={y}
@@ -202,9 +227,14 @@ export default function App() {
                 />
               )
             })}
+            {settling && <Payouts events={settling.events} />}
           </g>
         </Felt>
         <Dice throwing={throwing} resting={resting} onLanded={onLanded} />
+        {/* The roll being settled, not the table's - during settlement the
+            table still holds the roll before, because what is on the felt is
+            what is being paid. */}
+        <Readout roll={settling?.roll ?? state.lastRoll} text={say?.text} tone={say?.kind} />
         </div>
         {ledger?.lines.length > 0 && (
           <ul className="ledger">
@@ -226,7 +256,7 @@ export default function App() {
         onClearAll={onClearAll}
         onTakeDown={onTakeDown}
         onRoll={onRoll}
-        rolling={!!throwing}
+        rolling={!!throwing || !!settling}
         say={say}
       />
 
