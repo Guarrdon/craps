@@ -27,6 +27,13 @@ export function reducer(state, action) {
       return setWorking(state, action.id, action.on)
     case 'odds':
       return backEverything(state).state
+    case 'configure':
+      // Changing the table's rules mid-hand is not something a house does, but
+      // this is one player's table and the bets already down keep the terms
+      // they were made on - only what happens next is affected.
+      return { ...state, table: { ...state.table, ...action.table }, refused: null }
+    case 'buyin':
+      return { ...newTable({ table: state.table }), bankroll: action.amount }
     case 'roll':
       return applyRoll(state, action.roll)
     case 'clear':

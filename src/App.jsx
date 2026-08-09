@@ -2,45 +2,56 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import Felt from './components/Felt.jsx'
 import Rail from './components/Rail.jsx'
 import Dice from './components/Dice.jsx'
-import { Payouts, Readout, settlingTime } from './components/Crew.jsx'
 import { ChipStack, Puck } from './components/Chips.jsx'
+import { Payouts, Readout, settlingTime } from './components/Crew.jsx'
+import { HelpDialog, RulesDialog, SettingsDialog, StatsDialog } from './components/Dialogs.jsx'
+import { CHIPS, OPENING_RAIL, money } from './lib/bank.js'
 import { betDef, isWorking } from './lib/bets.js'
-import { OPENING_RAIL, money } from './lib/bank.js'
 import { callFor, ledgerFor } from './lib/calls.js'
+import { throwDice } from './lib/dice.js'
 import { chipAt, chipStyleAt } from './lib/layout.js'
 import { check, toLegal, unitFor } from './lib/limits.js'
-import { throwDice } from './lib/dice.js'
 import { houseRng, makeRng } from './lib/rng.js'
+import {
+  clearGame,
+  loadGame,
+  loadPrefs,
+  loadStats,
+  recordRoll,
+  recordWager,
+  resetStats,
+  saveGame,
+  savePrefs,
+  saveStats,
+} from './lib/storage.js'
 import { backEverything, newTable, reducer } from './lib/table.js'
 import './styles.css'
 
 // Set by scripts/probe.mjs with ?probe on the URL. Dev builds only - the flag
 // is read once at module load and is never true in a build.
-const PROBE_ONLY =
-  import.meta.env.DEV && new URLSearchParams(globalThis.location?.search ?? '').has('probe')
+const QUERY = new URLSearchParams(globalThis.location?.search ?? '')
+const PROBE_ONLY = import.meta.env.DEV && QUERY.has('probe')
+// ?fresh skips the saved game, which the browser harnesses need so a run does
+// not start halfway through whatever the last one left behind.
+const FRESH = QUERY.has('fresh') || PROBE_ONLY
 
 export default function App() {
-  const [state, dispatch] = useReducer(reducer, undefined, () =>
-    newTable({ bankroll: OPENING_RAIL }),
-  )
-  const [denom, setDenom] = useState(5)
-  const [boxMode, setBoxMode] = useState('place')
+  const [state, dispatch] = useReducer(reducer, undefined, () => {
+    const saved = FRESH ? null : loadGame()
+    return saved ?? newTable({ bankroll: OPENING_RAIL })
+  })
+  const [prefs, setPrefs] = useState(() => (FRESH ? { denom: 5, boxMode: 'place' } : loadPrefs()))
+  const [stats, setStats] = useState(() => (FRESH ? loadStats() : loadStats()))
   const [say, setSay] = useState(null)
   const [ledger, setLedger] = useState(null)
-  // Which spot was last pointed at, and how many times anything has been. Not
-  // shown to anyone - it is what scripts/probe.mjs reads to check that every
-  // printed spot on the felt answers to a click where its chips go, and the
-  // counter is what tells a repeat click apart from a click that hit nothing.
+  const [open, setOpen] = useState(null) // which dialog
   const [pointed, setPointed] = useState(null)
-  // The throw being played back, and where the dice came to rest after the
-  // last one - they stay on the felt until the next throw, as they do at a
-  // table until the stickman pushes them back.
   const [throwing, setThrowing] = useState(null)
   const [resting, setResting] = useState(null)
-  // The crew working the felt after a throw: the events, spread over about a
-  // second. Until this clears, the table shows what is being paid rather than
-  // what it will look like afterwards.
   const [settling, setSettling] = useState(null)
+
+  const { denom, boxMode } = prefs
+  const setPref = useCallback((patch) => setPrefs((p) => ({ ...p, ...patch })), [])
 
   // The house's own source, made once and never seeded. Nothing about how the
   // table is played may reach it.
@@ -59,6 +70,22 @@ export default function App() {
     [state],
   )
 
+  // --- remembering
+  useEffect(() => {
+    if (PROBE_ONLY) return
+    saveGame(state)
+  }, [state])
+  useEffect(() => {
+    if (PROBE_ONLY) return
+    savePrefs(prefs)
+  }, [prefs])
+  useEffect(() => {
+    if (PROBE_ONLY) return
+    saveStats(stats)
+  }, [stats])
+
+  // --- betting
+
   const put = useCallback(
     (id, want) => {
       /*
@@ -74,6 +101,7 @@ export default function App() {
         return false
       }
       dispatch({ type: 'bet', id, amount: add })
+      setStats((s) => recordWager(s, add))
       const step = unitFor(id, ctx)
       setSay({
         kind: 'bet',
@@ -110,14 +138,13 @@ export default function App() {
       return
     }
     dispatch({ type: 'odds' })
+    setStats((s) => recordWager(s, backed))
     setSay({ kind: 'bet', text: `${money(backed)} in odds, at the most this table allows.` })
   }, [state])
 
   const onWorking = useCallback(
     (on, only) => {
-      const ids = only
-        ? [only]
-        : Object.keys(state.bets).filter((id) => betDef(id).togglable)
+      const ids = only ? [only] : Object.keys(state.bets).filter((id) => betDef(id).togglable)
       if (!ids.length) return
       for (const id of ids) dispatch({ type: 'working', id, on })
       setSay({
@@ -141,6 +168,8 @@ export default function App() {
     for (const id of Object.keys(state.bets)) dispatch({ type: 'takedown', id })
     setSay({ kind: 'bet', text: 'Everything that can come down is down.' })
   }, [state.bets])
+
+  // --- throwing
 
   const onRoll = useCallback(() => {
     if (throwing || settling) return
@@ -183,7 +212,7 @@ export default function App() {
     setSay({ kind: 'call', text: callFor(roll, events) })
     setResting(throwing.resting)
     setThrowing(null)
-    setSettling({ roll, events })
+    setSettling({ roll, events, rail: next.bankroll })
   }, [state, throwing])
 
   // And once the crew has finished, the felt catches up: bets come down, the
@@ -192,49 +221,99 @@ export default function App() {
     if (!settling) return undefined
     const timer = setTimeout(() => {
       dispatch({ type: 'roll', roll: settling.roll })
+      setStats((s) => recordRoll(s, settling.roll, settling.events, settling.rail))
       setLedger({ roll: settling.roll, ...ledgerFor(settling.events) })
       setSettling(null)
     }, settlingTime(settling.events))
     return () => clearTimeout(timer)
   }, [settling])
 
+  // --- the table itself
+
+  const onNewSession = useCallback(() => {
+    dispatch({ type: 'buyin', amount: OPENING_RAIL })
+    clearGame()
+    setLedger(null)
+    setResting(null)
+    setSay({ kind: 'bet', text: `Bought in for ${money(OPENING_RAIL)}. New shooter coming out.` })
+    setOpen(null)
+  }, [])
+
+  /*
+   * Keys. Everything is reachable with the mouse; these only make it quicker,
+   * which is the right way round for a game where a misclick costs money.
+   */
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.target.matches?.('input, select, textarea')) return
+      if (open && e.key !== '?') return
+
+      const k = e.key.toLowerCase()
+      if (k === 'r' || e.key === ' ') { e.preventDefault(); onRoll() }
+      else if (k === 'o') onOdds()
+      else if (k === 'w') onWorking(!Object.keys(state.bets).some((id) => betDef(id).togglable && isWorking(id, state.bets[id], state.phase)))
+      else if (k === 'b') setPref({ boxMode: boxMode === 'place' ? 'buy' : 'place' })
+      else if (e.key === '?') setOpen((o) => (o === 'help' ? null : 'help'))
+      else if (/^[1-5]$/.test(e.key)) setPref({ denom: CHIPS[Number(e.key) - 1].value })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onRoll, onOdds, onWorking, boxMode, open, state, setPref])
+
+  const rail = state.bankroll + Object.values(state.bets).reduce((s, b) => s + b.amount, 0)
+
   return (
     <div className="game">
+      <header className="top">
+        <h1>Craps</h1>
+        <div className="top-figures">
+          <span>{money(rail)}</span>
+          <span className="top-dim">{state.phase === 'come-out' ? 'Coming out' : `Point ${state.point}`}</span>
+        </div>
+        <nav>
+          <button type="button" onClick={() => setOpen('rules')}>Every bet</button>
+          <button type="button" onClick={() => setOpen('stats')}>Session</button>
+          <button type="button" onClick={() => setOpen('table')}>Table</button>
+          <button type="button" onClick={() => setOpen('help')} aria-label="How this works">?</button>
+        </nav>
+      </header>
+
       <div className="table">
         {/* The felt and the dice share one box, so a percentage of it is the
             same place on the cloth for both and they cannot drift apart. */}
         <div className="felt-frame">
-        <Felt onSpot={onSpot} point={state.point} marked={state.marked}>
-          <g className="on-felt">
-            <Puck point={state.point} />
-            {Object.entries(state.bets).map(([id, bet]) => {
-              const [x, y] = chipAt(id)
-              return (
-                <ChipStack
-                  // Keyed on the amount as well as the spot, so a pile that
-                  // changes is set down again rather than silently becoming a
-                  // different number of chips.
-                  key={`${id}:${bet.amount}`}
-                  id={id}
-                  x={x}
-                  y={y}
-                  {...chipStyleAt(id)}
-                  amount={bet.amount}
-                  working={isWorking(id, bet, state.phase)}
-                  label={betDef(id).label}
-                  onClick={onSpot}
-                  onRemove={onTakeDown}
-                />
-              )
-            })}
-            {settling && <Payouts events={settling.events} />}
-          </g>
-        </Felt>
-        <Dice throwing={throwing} resting={resting} onLanded={onLanded} />
-        {/* The roll being settled, not the table's - during settlement the
-            table still holds the roll before, because what is on the felt is
-            what is being paid. */}
-        <Readout roll={settling?.roll ?? state.lastRoll} text={say?.text} tone={say?.kind} />
+          <Felt onSpot={onSpot} point={state.point} marked={state.marked}>
+            <g className="on-felt">
+              <Puck point={state.point} />
+              {Object.entries(state.bets).map(([id, bet]) => {
+                const [x, y] = chipAt(id)
+                return (
+                  <ChipStack
+                    // Keyed on the amount as well as the spot, so a pile that
+                    // changes is set down again rather than silently becoming
+                    // a different number of chips.
+                    key={`${id}:${bet.amount}`}
+                    id={id}
+                    x={x}
+                    y={y}
+                    {...chipStyleAt(id)}
+                    amount={bet.amount}
+                    working={isWorking(id, bet, state.phase)}
+                    label={betDef(id).label}
+                    onClick={onSpot}
+                    onRemove={onTakeDown}
+                  />
+                )
+              })}
+              {settling && <Payouts events={settling.events} />}
+            </g>
+          </Felt>
+          <Dice throwing={throwing} resting={resting} onLanded={onLanded} />
+          {/* The roll being settled, not the table's - during settlement the
+              table still holds the roll before, because what is on the felt is
+              what is being paid. */}
+          <Readout roll={settling?.roll ?? state.lastRoll} text={say?.text} tone={say?.kind} />
         </div>
         {ledger?.lines.length > 0 && (
           <ul className="ledger">
@@ -248,9 +327,9 @@ export default function App() {
       <Rail
         state={state}
         denom={denom}
-        onDenom={setDenom}
+        onDenom={(v) => setPref({ denom: v })}
         boxMode={boxMode}
-        onBoxMode={setBoxMode}
+        onBoxMode={(v) => setPref({ boxMode: v })}
         onOdds={onOdds}
         onWorking={onWorking}
         onClearAll={onClearAll}
@@ -259,6 +338,25 @@ export default function App() {
         rolling={!!throwing || !!settling}
         say={say}
       />
+
+      {open === 'rules' && <RulesDialog table={state.table} onClose={() => setOpen(null)} />}
+      {open === 'stats' && (
+        <StatsDialog
+          stats={stats}
+          rail={rail}
+          onReset={() => setStats(resetStats())}
+          onClose={() => setOpen(null)}
+        />
+      )}
+      {open === 'table' && (
+        <SettingsDialog
+          table={state.table}
+          onChange={(t) => dispatch({ type: 'configure', table: t })}
+          onNewSession={onNewSession}
+          onClose={() => setOpen(null)}
+        />
+      )}
+      {open === 'help' && <HelpDialog onClose={() => setOpen(null)} />}
 
       {import.meta.env.DEV && pointed && (
         <div className="probe" data-spot={pointed.id} data-n={pointed.n} hidden />

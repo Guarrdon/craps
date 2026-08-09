@@ -11,6 +11,7 @@ import {
   quote,
   settle,
 } from '../src/lib/bets.js'
+import { EDGES } from '../src/lib/edges.js'
 import { roll } from '../src/lib/rng.js'
 
 // ------------------------------------------------------------ the catalogue
@@ -65,6 +66,19 @@ const EXACT = {
 for (const [id, expected] of Object.entries(EXACT)) {
   near(`${betDef(id).label} keeps ${expected.toFixed(3)}% for the house`, edge(id), expected, 1e-8)
 }
+
+/*
+ * And the published table agrees with the code.
+ *
+ * edges.js is what the rules screen shows a player and what the audit measures
+ * the engine against. For the one-roll bets the true figure is computable from
+ * the catalogue itself, so the two are held against each other here - a payout
+ * typo moves one, a wrong claim moves the other, and either way this fails.
+ */
+for (const d of BET_IDS.map(betDef).filter((d) => d.oneRoll)) {
+  near(`the rules screen quotes ${d.label} correctly`, EDGES[d.id], edge(d.id), 0.001)
+}
+check('every bet on the felt has a published cost', BET_IDS.every((id) => EDGES[id] !== undefined))
 
 check('every double hop pays the same 13.889%', HOPS.filter(([a, b]) => a === b)
   .every(([a, b]) => Math.abs(edge(`hop-${a}-${b}`) - 13.8888888889) < 1e-8))

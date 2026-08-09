@@ -173,6 +173,45 @@ try {
     check('and they came to rest inside the tray', inside)
   }
 
+  // --- the screens around the game
+  for (const [button, want] of [
+    ['Every bet', 'Pass Line'],
+    ['Session', 'Throws'],
+    ['Table', 'Minimum on the line'],
+    ['?', 'Putting money down'],
+  ]) {
+    await page.locator(`.top nav button:has-text("${button}")`).click()
+    await page.locator('.dialog').waitFor({ timeout: 4000 })
+    const text = await page.locator('.dialog').textContent()
+    check(`the ${button} screen opens and says something`, text.includes(want), want)
+    await page.keyboard.press('Escape')
+    await page.locator('.dialog').waitFor({ state: 'detached', timeout: 4000 })
+  }
+
+  // The rules screen is generated from the catalogue, so it should carry every
+  // bet's real cost - including the one bet in the house that costs nothing.
+  await page.locator('.top nav button:has-text("Every bet")').click()
+  const rules = await page.locator('.dialog').textContent()
+  check('the rules screen quotes the house edge', /1\.414%/.test(rules))
+  check('and says the odds cost nothing', /nothing/.test(rules))
+  check('and covers the bonus row', /Boom or Bust/i.test(rules))
+  await page.waitForTimeout(400) // the dialog fades in; a shot before it lands is a shot of the fade
+  await page.screenshot({ path: OUT.replace(/\.png$/, '-rules.png') })
+  await page.keyboard.press('Escape')
+
+  // --- and the whole thing survives being closed
+  {
+    await page.locator('.chip-button').nth(2).click()
+    for (const id of ['field', 'yo', 'hard-8']) await clickSpot(id)
+    const before = await bets()
+    const railBefore = await rail()
+    check('there is something to remember', before >= 3, `${before} bets`)
+    await page.reload({ waitUntil: 'networkidle' })
+    await page.waitForTimeout(120)
+    check('the game is where you left it after a reload', (await bets()) === before, `${before} bets`)
+    check('and so is the rail', (await rail()) === railBefore)
+  }
+
   // Leave the felt in a state worth photographing: a point, chips in several
   // places, odds behind the line.
   if ((await puck()) === 'OFF') {

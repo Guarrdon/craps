@@ -16,6 +16,7 @@
  */
 
 import { BET_IDS, LAY_ODDS, betDef } from '../src/lib/bets.js'
+import { EDGES } from '../src/lib/edges.js'
 import { DEFAULT_TABLE, maxBet, rangeFor, unitFor as unitOf } from '../src/lib/limits.js'
 import { makeRng } from '../src/lib/rng.js'
 import { newTable, placeBet, reducer, takeDown } from '../src/lib/table.js'
@@ -34,30 +35,18 @@ const pct = (n) => `${(n * 100).toFixed(3)}%`
 const pad = (s, n) => String(s).padEnd(n)
 const lpad = (s, n) => String(s).padStart(n)
 
-// What each bet is known to be worth to the house, per bet resolved, on this
-// felt. Sourced from the standard analysis of each wager; the ones that depend
-// on the layout - the field, the bonus row - are for this table's payouts and
-// no other.
-const EXPECTED = {
-  pass: 1.414, dontpass: 1.364,
-  come: 1.414, dontcome: 1.364,
-  'pass-odds': 0, 'dontpass-odds': 0,
-  'come-odds-4': 0, 'come-odds-5': 0, 'come-odds-6': 0,
-  'come-odds-8': 0, 'come-odds-9': 0, 'come-odds-10': 0,
-  'dontcome-odds-4': 0, 'dontcome-odds-5': 0, 'dontcome-odds-6': 0,
-  'dontcome-odds-8': 0, 'dontcome-odds-9': 0, 'dontcome-odds-10': 0,
-  'place-4': 6.667, 'place-5': 4.0, 'place-6': 1.515,
-  'place-8': 1.515, 'place-9': 4.0, 'place-10': 6.667,
-  'buy-4': 4.762, 'buy-5': 4.762, 'buy-6': 4.762,
-  'buy-8': 4.762, 'buy-9': 4.762, 'buy-10': 4.762,
-  'lay-4': 2.439, 'lay-5': 3.226, 'lay-6': 4.0,
-  'lay-8': 4.0, 'lay-9': 3.226, 'lay-10': 2.439,
-  field: 5.556,
-  any7: 16.667, anycraps: 11.111, aces: 13.889, boxcars: 13.889,
-  acedeuce: 11.111, yo: 11.111, horn: 12.5, ce: 11.111,
-  'hard-4': 11.111, 'hard-6': 9.091, 'hard-8': 9.091, 'hard-10': 11.111,
-  little: 18.56, big: 18.56, all: 20.59,
-}
+/*
+ * What each bet is known to be worth to the house, per bet resolved.
+ *
+ * From src/lib/edges.js, which is the same table the rules screen shows the
+ * player - so this run is measuring the engine against exactly what the game
+ * claims, and a wrong claim fails here.
+ *
+ * Only the bets that go up on their own are measured. Come bets on a number
+ * are measured through the come box they arrived from.
+ */
+const SKIP = /^(come|dontcome)-\d+$/
+const EXPECTED = Object.fromEntries(Object.entries(EDGES).filter(([id]) => !SKIP.test(id)))
 
 // ---------------------------------------------------------------- measuring
 
