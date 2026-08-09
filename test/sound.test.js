@@ -60,4 +60,35 @@ check('and the yo', cuesFor([pay('yo', 5, 75)]).big)
   eq('and neither is a push', cuesFor([{ kind: 'push', id: 'dontpass', amount: 25 }]).paid, 0)
 }
 
+// --------------------------------------------------------- the hand ending
+
+{
+  const out = [{ kind: 'sevenout' }, take('pass', 25), take('place-6', 30)]
+  check('a seven out is called out', cuesFor(out).sevenOut)
+  check('and is not craps', !cuesFor(out).craps)
+  eq('and pays nothing', cuesFor(out).paid, 0)
+}
+
+{
+  // The same throw ends the hand and pays the don't side, which is the whole
+  // reason both cues have to be able to fire on one roll.
+  const both = [{ kind: 'sevenout' }, take('pass', 25), pay('dontpass', 25, 25), pay('lay-4', 40, 20)]
+  const c = cuesFor(both)
+  check('a seven out can pay somebody', c.sevenOut && c.paid === 45)
+  check('and laying the four is not a big win', !c.big)
+}
+
+{
+  const c = cuesFor([{ kind: 'craps', total: 3 }, take('pass', 25)])
+  check('craps on the come-out is its own thing', c.craps)
+  check('and is not a seven out', !c.sevenOut)
+}
+
+{
+  // A come-out seven is a winner, not the end of a hand.
+  const c = cuesFor([{ kind: 'natural', total: 7 }, pay('pass', 25, 25)])
+  check('a natural is neither', !c.sevenOut && !c.craps)
+  eq('and it pays', c.paid, 25)
+}
+
 done('sound')

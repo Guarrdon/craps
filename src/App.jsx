@@ -267,7 +267,7 @@ export default function App() {
       setLedger({ roll: settling.roll, ...ledgerFor(settling.events) })
       // Paid once the crew has finished working it, which is when the chips
       // would actually be pushed across.
-      sound.payout(settling.events)
+      sound.outcome(settling.events)
 
       /*
        * The line rides.
