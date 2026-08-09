@@ -1,5 +1,7 @@
 import { check, done, eq } from './harness.js'
-import { BET_IDS, HOPS, POINTS, betDef } from '../src/lib/bets.js'
+import { BET_IDS, BONUS, HOPS, POINTS, betDef, settle } from '../src/lib/bets.js'
+import { BONUS_PAYTABLES } from '../src/lib/edges.js'
+import { roll } from '../src/lib/rng.js'
 import {
   BONUS_BOXES,
   BOX_LABEL,
@@ -13,8 +15,13 @@ import {
   SPOT_IDS,
   TRACKERS,
   TRACKER_ROWS,
+  bonusPrice,
   chipAt,
 } from '../src/lib/layout.js'
+
+// The numbers each bonus bet is watching, so a completed set can be handed to
+// settle() without the test writing them out a second time.
+const BONUS_WATCH = Object.fromEntries(Object.entries(BONUS).map(([id, b]) => [id, b.numbers]))
 
 /*
  * The felt and the catalogue have to agree.
@@ -117,13 +124,24 @@ check(
   TRACKERS.map((t) => t.number).sort((a, b) => a - b).join() === '2,3,4,5,6,8,9,10,11,12',
 )
 check('all three bonus boxes are on the felt', BONUS_BOXES.every((b) => SPOTS[b.id]))
-check(
-  'and each prints the price the engine will actually pay',
-  BONUS_BOXES.every((b) => {
-    const [num, den] = betDef(b.id).pays
-    return b.pays === `${num} to ${den}`
-  }),
-)
+
+/*
+ * The bonus row is the one price on this felt that moves house to house, so
+ * what gets printed has to follow the table rather than being fixed. This is
+ * the check that the felt cannot advertise a price the engine will not pay -
+ * at either pay table.
+ */
+for (const paytable of Object.keys(BONUS_PAYTABLES)) {
+  check(
+    `the felt prints the ${BONUS_PAYTABLES[paytable].label} table correctly`,
+    BONUS_BOXES.every((b) => bonusPrice(b.id, paytable) === `${BONUS_PAYTABLES[paytable].pays[b.id]} to 1`),
+  )
+  for (const b of BONUS_BOXES) {
+    const rate = BONUS_PAYTABLES[paytable].pays[b.id]
+    const paid = settle(b.id, 5, roll(3, 3), { marked: new Set(BONUS_WATCH[b.id]), bonus: paytable })
+    eq(`a $5 ${b.label} pays $${5 * rate} at ${paytable} to 1`, paid.pay, 5 * rate)
+  }
+}
 
 // ------------------------------------------------------------- the hardways
 

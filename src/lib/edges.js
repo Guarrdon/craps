@@ -67,12 +67,70 @@ export const EDGES = {
   'hard-8': 9.091,
   'hard-10': 11.111,
 
-  // At 30/30/150. Small and Tall come in about once in thirty eight shooters,
-  // All about once in five hundred and twenty six.
-  little: 18.56,
-  big: 18.56,
-  all: 20.59,
+  // Worked out from the pay table below rather than quoted, because this is
+  // the one bet on the felt whose price moves house to house.
+  little: 0,
+  big: 0,
+  all: 0,
 }
+
+/*
+ * The chance of throwing every number in a set before a seven.
+ *
+ * Inclusion-exclusion over the subsets. For any collection of numbers, the
+ * chance that at least one of them is still missing when the seven arrives is
+ * a sum over subsets of "the seven came before all of these" - and each of
+ * those is just six ways against six plus the ways of the subset, because
+ * every other throw is irrelevant to the question.
+ *
+ * Thirty two subsets for the small, a thousand and twenty four for the all.
+ * Exact, and quick enough to do at module load.
+ */
+export function chanceOfAll(numbers) {
+  const WAYS = { 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1 }
+  let p = 0
+  for (let mask = 0; mask < 1 << numbers.length; mask++) {
+    let ways = 0
+    let bits = 0
+    for (let i = 0; i < numbers.length; i++) {
+      if (mask & (1 << i)) {
+        ways += WAYS[numbers[i]]
+        bits++
+      }
+    }
+    p += (bits % 2 ? -1 : 1) * (6 / (6 + ways))
+  }
+  return p
+}
+
+/*
+ * The pay tables a table might print for the bonus row.
+ *
+ * 30 to 1 is what the reference photograph prints and what most houses run.
+ * 34 to 1 turns it from one of the worst bets on the felt into one of the
+ * better long shots, and a few places still offer it.
+ *
+ * A house that prints "31 FOR 1" is printing the same bet: "for one" includes
+ * your stake coming back, "to one" does not, so 31 for 1 and 30 to 1 are the
+ * same money. Santa Fe Station words it the first way and the reference table
+ * words it the second.
+ */
+export const BONUS_PAYTABLES = {
+  '30': { label: '30 to 1 · 150 to 1', also: '31 for 1 · 151 for 1', pays: { little: 30, big: 30, all: 150 } },
+  '34': { label: '34 to 1 · 175 to 1', also: '35 for 1 · 176 for 1', pays: { little: 34, big: 34, all: 175 } },
+}
+
+export const BONUS_CHANCE = {
+  little: chanceOfAll([2, 3, 4, 5, 6]),
+  big: chanceOfAll([8, 9, 10, 11, 12]),
+  all: chanceOfAll([2, 3, 4, 5, 6, 8, 9, 10, 11, 12]),
+}
+
+// What a bonus bet costs at a given pay table, as a percentage.
+export const bonusEdge = (id, paytable = '30') =>
+  -(BONUS_CHANCE[id] * BONUS_PAYTABLES[paytable].pays[id] - (1 - BONUS_CHANCE[id])) * 100
+
+for (const id of ['little', 'big', 'all']) EDGES[id] = bonusEdge(id, '30')
 
 // Come odds are the same bet as pass odds with a different number on it.
 for (const n of [4, 5, 6, 8, 9, 10]) {

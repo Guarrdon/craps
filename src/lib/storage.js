@@ -159,7 +159,14 @@ export const recordWager = (stats, amount) => ({ ...stats, wagered: stats.wagere
 export const defaultPrefs = () => ({
   denom: 5,
   boxMode: 'place',
-  recording: true, // statistics can be switched off
+  // The chips stay on the line when it wins and ride the next come-out, which
+  // is what happens at a table - the payout is set down beside them and you
+  // pick up the payout.
+  lineRides: true,
+  // A standing opening: the bets that go out every come-out, and whether to
+  // put them out without being asked.
+  opening: null,
+  autoOpen: false,
 })
 
 export const loadPrefs = () => ({ ...defaultPrefs(), ...read(PREFS, {}) })

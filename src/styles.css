@@ -1005,9 +1005,14 @@ body {
   to { opacity: 1; }
 }
 
+/* Height measured against the viewport, not the box it sits in.
+   `max-height: 100%` on a centred grid item resolves against a track that is
+   itself sized by its contents, which is circular - so it was treated as no
+   limit at all and the long screens simply ran off the bottom of the page with
+   nothing to scroll. */
 .dialog {
   width: min(660px, 100%);
-  max-height: 100%;
+  max-height: calc(100dvh - 2 * clamp(10px, 3vw, 40px));
   display: flex;
   flex-direction: column;
   background: linear-gradient(#241408, #170c06);
@@ -1063,6 +1068,8 @@ body {
 
 .dialog-body {
   overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0; /* or a flex child refuses to shrink below its content */
   padding: 16px 22px 22px;
   font-size: 14px;
   line-height: 1.6;
@@ -1237,3 +1244,54 @@ kbd {
 }
 
 .dialog-body .dim { color: var(--print-dim); }
+
+/* --- the opening, and pressing */
+
+.opening {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.opening .small { padding: 5px 8px; font-size: 11.5px; }
+
+.tick {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--print-dim);
+  cursor: pointer;
+}
+
+.tick input { accent-color: var(--gold); cursor: pointer; }
+
+/* Open until the dice leave the hand, which is the real window. */
+.press {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(125, 220, 154, 0.09);
+  border: 1px solid rgba(125, 220, 154, 0.32);
+  animation: call-in 240ms ease backwards;
+}
+
+.press-title {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9fe3b4;
+}
+
+.press button em {
+  font-style: normal;
+  color: #7ddc9a;
+}
+
+.press .press-all {
+  border-color: rgba(125, 220, 154, 0.5);
+}

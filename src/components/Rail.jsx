@@ -41,6 +41,13 @@ export default function Rail({
   onRoll,
   rolling,
   say,
+  pressable = [],
+  onPress,
+  opening,
+  onOpening,
+  onSaveOpening,
+  autoOpen,
+  onAutoOpen,
 }) {
   const standing = Object.entries(state.bets)
   const onFelt = atRisk(state)
@@ -118,6 +125,46 @@ export default function Rail({
             Take it all down
           </button>
         </div>
+
+        {/*
+          The opening. Most players bet the same thing every come-out, and
+          clicking it out chip by chip every time is the single most tedious
+          thing about a craps game. Save it once; put it out with a button, or
+          have it out waiting for you.
+        */}
+        <div className="opening">
+          <button type="button" onClick={onOpening} disabled={!opening?.length}>
+            My opening{opening?.length ? ` · ${money(opening.reduce((s, b) => s + b.amount, 0))}` : ''}
+          </button>
+          <button type="button" className="small" onClick={onSaveOpening} title="Save what is on the felt now">
+            Save
+          </button>
+          <label className="tick" title="Put it out on every new come-out, without being asked">
+            <input type="checkbox" checked={!!autoOpen} onChange={(e) => onAutoOpen(e.target.checked)} />
+            <span>Automatically</span>
+          </label>
+        </div>
+
+        {/*
+          The press window. A winning place bet is paid alongside and stays
+          where it is - what a table asks you next is whether it goes up. Open
+          until the dice leave the hand, which is the real window.
+        */}
+        {pressable.length > 0 && (
+          <div className="press">
+            <span className="press-title">Paid and still up</span>
+            {pressable.map(({ id, pay }) => (
+              <button key={id} type="button" onClick={() => onPress(id)}>
+                Press {betDef(id).label} <em>+{money(pay)}</em>
+              </button>
+            ))}
+            {pressable.length > 1 && (
+              <button type="button" className="press-all" onClick={() => onPress()}>
+                Press them all
+              </button>
+            )}
+          </div>
+        )}
 
         <button type="button" className="roll" onClick={onRoll} disabled={rolling}>
           Roll

@@ -21,6 +21,9 @@ export const DEFAULT_TABLE = {
   bonusMin: 1,
   bonusMax: 25,
   odds: '3-4-5',
+  // Which pay table the bonus row runs. See BONUS_PAYTABLES in edges.js - it
+  // is the one price on this felt that genuinely differs house to house.
+  bonus: '30',
   vigRate: 0.05,
   vigMin: 1,
 }

@@ -41,6 +41,35 @@ const roll = async () => {
   await page.waitForTimeout(30)
 }
 
+const hasLine = async () => (await page.locator('.bets li:has-text("Pass Line")').count()) > 0
+
+// Get to a clean come-out: nothing marked, the puck off. Where a shooter's
+// turn begins, and the only moment the bonus row will take a bet.
+const comeOut = async () => {
+  for (let i = 0; i < 120; i++) {
+    if ((await puck()) === 'OFF' && (await page.locator('.tracker.is-marked').count()) === 0) return true
+    if (!(await hasLine())) {
+      await page.locator('.chip-button').nth(1).click()
+      await clickSpot('pass')
+    }
+    await roll()
+  }
+  return false
+}
+
+// And the other way: a point established, with a line bet behind it.
+const onPoint = async () => {
+  for (let i = 0; i < 120; i++) {
+    if ((await puck()) !== 'OFF') return true
+    if (!(await hasLine())) {
+      await page.locator('.chip-button').nth(1).click()
+      await clickSpot('pass')
+    }
+    await roll()
+  }
+  return false
+}
+
 try {
   // --- a chip goes down on the line
   await page.locator('.chip-button').nth(2).click() // $25
@@ -184,6 +213,28 @@ try {
     await page.locator('.dialog').waitFor({ timeout: 4000 })
     const text = await page.locator('.dialog').textContent()
     check(`the ${button} screen opens and says something`, text.includes(want), want)
+
+    /*
+     * And it fits on the screen.
+     *
+     * The long screens used to run off the bottom of the page with no way to
+     * reach the end of them: `max-height: 100%` on a centred grid item
+     * resolves against a track sized by its own contents, which is circular,
+     * so it was treated as no limit at all.
+     */
+    const fits = await page.evaluate(() => {
+      const d = document.querySelector('.dialog')
+      const b = document.querySelector('.dialog-body')
+      const box = d.getBoundingClientRect()
+      return {
+        onScreen: box.top >= -1 && box.bottom <= window.innerHeight + 1,
+        scrollable: b.scrollHeight <= b.clientHeight + 1 || b.clientHeight > 0,
+        reachesEnd: b.scrollHeight - b.clientHeight >= 0,
+      }
+    })
+    check(`the ${button} screen fits on the screen`, fits.onScreen)
+    check(`and its content can be scrolled to the end`, fits.scrollable && fits.reachesEnd)
+
     await page.keyboard.press('Escape')
     await page.locator('.dialog').waitFor({ state: 'detached', timeout: 4000 })
   }
@@ -210,6 +261,85 @@ try {
     await page.waitForTimeout(120)
     check('the game is where you left it after a reload', (await bets()) === before, `${before} bets`)
     check('and so is the rail', (await rail()) === railBefore)
+  }
+
+  /*
+   * --- the opening
+   *
+   * Most players bet the same thing every come-out. Saving it and putting it
+   * back with one button is the difference between playing and clicking.
+   */
+  {
+    // The bonus row only takes a bet on a clean come-out, which is the whole
+    // point of it - so the opening has to be laid out on one.
+    await comeOut()
+    await page.locator('button:has-text("Take it all down")').click()
+    await page.locator('.chip-button').nth(1).click() // $5
+    for (const id of ['pass', 'little', 'big']) await clickSpot(id)
+    const usual = await bets()
+    check('the usual opening goes out: line, Little and Big', usual === 3, `${usual} bets`)
+    await page.locator('.opening button:has-text("Save")').click()
+    check('and saves', /Saved/.test(await table.say()), (await table.say()).trim())
+
+    await page.locator('button:has-text("Take it all down")').click()
+    const bare = await bets()
+    await page.locator('.opening button:has-text("My opening")').click()
+    check('and comes back in one click', (await bets()) === 3, `${bare} → ${await bets()}`)
+    check('for the same money', /\$20/.test(await table.say()), (await table.say()).trim())
+  }
+
+  /*
+   * --- pressing, and the line riding
+   *
+   * A winning place bet is paid alongside and stays where it is; the question
+   * a table asks next is whether it goes up. And a winning line bet does not
+   * come back - the payout is set beside it and the original rides.
+   */
+  {
+    let pressed = null
+    // Every box number covered, rolling until one of them pays. A seven out
+    // just means putting the spread back and waiting for the next shooter.
+    for (let i = 0; i < 160 && !pressed; i++) {
+      if ((await puck()) === 'OFF') {
+        await onPoint()
+        await page.locator('.chip-button').nth(2).click() // $25
+        for (const n of [4, 5, 6, 8, 9, 10]) await clickSpot(`place-${n}`)
+      }
+      await roll()
+      if (await page.locator('.press button').first().isVisible().catch(() => false)) {
+        const which = await page.locator('.press button').first().textContent()
+        await page.locator('.press button').first().click()
+        pressed = { which: which.trim(), said: ((await table.say()) ?? '').trim() }
+      }
+    }
+    check('a bet that was paid and stayed up offers a press', !!pressed, pressed?.which ?? 'never came up')
+    // Press puts up as much of the win as the spot can be paid on and hands
+    // back the rest, which is the sentence a dealer says while doing it.
+    check('and pressing says what it pressed to', /pressed to \$/i.test(pressed?.said ?? ''), pressed?.said)
+  }
+
+  /*
+   * --- the line rides
+   *
+   * A winning pass line does not come back. The dealer sets the payout beside
+   * it and the original is still there as your bet for the next come-out,
+   * which is what nearly everyone at a table does with it.
+   */
+  {
+    await page.locator('button:has-text("Take it all down")').click()
+    let made = false
+    for (let i = 0; i < 200 && !made; i++) {
+      if (!(await onPoint())) break
+      const staked = await page.locator('.bets li:has-text("Pass Line") .bet-amount').textContent()
+      await roll()
+      if (/the winner/i.test((await table.say()) ?? '')) {
+        made = true
+        check('the point being made leaves the line where it was', await hasLine())
+        check('for the same money', (await page.locator('.bets li:has-text("Pass Line") .bet-amount').textContent()) === staked, staked)
+        check('and the table is coming out again', (await puck()) === 'OFF')
+      }
+    }
+    check('a point was made to check it against', made)
   }
 
   // Leave the felt in a state worth photographing: a point, chips in several

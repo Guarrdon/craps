@@ -12,7 +12,7 @@
  */
 
 import { POINTS, betDef, isWorking, quote } from './bets.js'
-import { check, maxBet, vigFor } from './limits.js'
+import { check, maxBet, unitFor, vigFor } from './limits.js'
 import { newTable, resolveRoll } from './rules.js'
 
 export { newTable }
@@ -27,6 +27,8 @@ export function reducer(state, action) {
       return setWorking(state, action.id, action.on)
     case 'odds':
       return backEverything(state).state
+    case 'many':
+      return placeMany(state, action.list).state
     case 'configure':
       // Changing the table's rules mid-hand is not something a house does, but
       // this is one player's table and the bets already down keep the terms
@@ -100,7 +102,13 @@ export function takeDown(state, id) {
   if (!bet) return state
   const d = betDef(id)
 
-  if (d.contract && !id.startsWith('dont')) {
+  // A line bet is only a contract once it has a number to be decided against.
+  // Before the come-out throw it is just chips on the felt and may be picked
+  // up - the house will not stop you, though giving up the come-out advantage
+  // for nothing is the worst trade on the table.
+  const loose = (id === 'pass' || id === 'dontpass') && state.phase === 'come-out'
+
+  if (d.contract && !id.startsWith('dont') && !loose) {
     return refuse(state, `${d.label} is a contract bet. It stays until it is decided.`)
   }
 
@@ -149,6 +157,43 @@ export function backEverything(state) {
     next = after
   }
   return { state: { ...next, refused: null }, backed }
+}
+
+/*
+ * A whole spread at once.
+ *
+ * The opening bet, put back. Each is checked on its own and anything the table
+ * will not take right now is simply skipped rather than stopping the rest -
+ * you cannot bet the come on a come-out, and a player asking for their usual
+ * spread does not want to be told so, they want the bets that are available.
+ *
+ * A spot that already has money on it is left alone, so repeating an opening
+ * twice does not quietly double it.
+ */
+export function placeMany(state, list) {
+  let next = state
+  let placed = 0
+  for (const { id, amount } of list) {
+    if (next.bets[id]) continue
+    const after = placeBet(next, id, amount)
+    if (after.refused) continue
+    next = after
+    placed += amount
+  }
+  return { state: { ...next, refused: null }, placed }
+}
+
+/*
+ * How much of a win can go back on the bet.
+ *
+ * "Press it" means put the winnings up, and what actually goes up is as much
+ * of them as the spot can be paid on. The six pays $35 on a $30 bet; press it
+ * and you are at $60 with $5 coming back, because $65 is not a number the six
+ * can pay 7:6 on. That is the sentence a dealer says while doing it.
+ */
+export function pressAmount(state, id, win) {
+  const unit = unitFor(id, { point: state.point })
+  return Math.floor(win / unit) * unit
 }
 
 // Turn a bet on or off for the come-out. Only the ones a dealer would put a

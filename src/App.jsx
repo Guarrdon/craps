@@ -24,7 +24,7 @@ import {
   savePrefs,
   saveStats,
 } from './lib/storage.js'
-import { backEverything, newTable, reducer } from './lib/table.js'
+import { backEverything, newTable, placeMany, pressAmount, reducer } from './lib/table.js'
 import './styles.css'
 
 // Set by scripts/probe.mjs with ?probe on the URL. Dev builds only - the flag
@@ -40,7 +40,9 @@ export default function App() {
     const saved = FRESH ? null : loadGame()
     return saved ?? newTable({ bankroll: OPENING_RAIL })
   })
-  const [prefs, setPrefs] = useState(() => (FRESH ? { denom: 5, boxMode: 'place' } : loadPrefs()))
+  const [prefs, setPrefs] = useState(() =>
+    FRESH ? { denom: 5, boxMode: 'place', lineRides: true } : loadPrefs(),
+  )
   const [stats, setStats] = useState(() => (FRESH ? loadStats() : loadStats()))
   const [say, setSay] = useState(null)
   const [ledger, setLedger] = useState(null)
@@ -49,6 +51,9 @@ export default function App() {
   const [throwing, setThrowing] = useState(null)
   const [resting, setResting] = useState(null)
   const [settling, setSettling] = useState(null)
+  // Bets that just won and are still standing. They can be pressed until the
+  // next throw, which is the window a table actually gives you.
+  const [pressable, setPressable] = useState([])
 
   const { denom, boxMode } = prefs
   const setPref = useCallback((patch) => setPrefs((p) => ({ ...p, ...patch })), [])
@@ -191,6 +196,7 @@ export default function App() {
 
     setSay({ kind: 'throw', text: 'Dice are out.' })
     setLedger(null)
+    setPressable([]) // the window to press closes when the dice leave the hand
     setThrowing({ ...thrown, roll })
   }, [state, throwing, settling])
 
@@ -223,10 +229,112 @@ export default function App() {
       dispatch({ type: 'roll', roll: settling.roll })
       setStats((s) => recordRoll(s, settling.roll, settling.events, settling.rail))
       setLedger({ roll: settling.roll, ...ledgerFor(settling.events) })
+
+      /*
+       * The line rides.
+       *
+       * When the point is made the dealer pays your pass line by putting an
+       * equal stack *beside* it. You pick up the payout; the original is still
+       * sitting there and it is your bet for the next come-out. Almost nobody
+       * picks it up, so leaving it is the honest default - and it can be taken
+       * down before the come-out throw like any other loose chips.
+       */
+      const rides = prefs.lineRides
+        ? settling.events
+            .filter((e) => e.kind === 'pay' && (e.id === 'pass' || e.id === 'dontpass'))
+            .map((e) => ({ id: e.id, amount: e.amount }))
+        : []
+
+      // What is still up and just got paid: a place bet, a buy, a hardway. Any
+      // of these can be pressed until the next throw, which is exactly the
+      // window a table gives you.
+      setPressable(
+        settling.events
+          .filter((e) => e.kind === 'pay' && !e.down)
+          .map((e) => ({ id: e.id, pay: e.pay })),
+      )
+
+      if (rides.length) dispatch({ type: 'many', list: rides })
       setSettling(null)
     }, settlingTime(settling.events))
     return () => clearTimeout(timer)
-  }, [settling])
+  }, [settling, prefs.lineRides])
+
+  // --- pressing
+
+  const onPress = useCallback(
+    (only) => {
+      const wins = only ? pressable.filter((p) => p.id === only) : pressable
+      const done = []
+      for (const { id, pay } of wins) {
+        const up = pressAmount(state, id, pay)
+        if (up <= 0 || up > state.bankroll) continue
+        dispatch({ type: 'bet', id, amount: up })
+        setStats((s) => recordWager(s, up))
+        done.push({ id, up, back: pay - up })
+      }
+      if (!done.length) {
+        setSay({ kind: 'refused', text: 'Nothing there to press, or not enough left on the rail.' })
+        return
+      }
+      setPressable((p) => p.filter((x) => !done.some((d) => d.id === x.id)))
+      const one = done.length === 1 ? done[0] : null
+      setSay({
+        kind: 'bet',
+        text: one
+          ? `${betDef(one.id).label} pressed to ${money((state.bets[one.id]?.amount ?? 0) + one.up)}${
+              one.back ? ` — ${money(one.back)} back.` : '.'
+            }`
+          : `Pressed ${done.length} bets, ${money(done.reduce((s, d) => s + d.up, 0))} up.`,
+      })
+    },
+    [pressable, state],
+  )
+
+  // --- the opening
+
+  const onOpening = useCallback(() => {
+    if (!prefs.opening?.length) {
+      setSay({ kind: 'refused', text: 'No opening saved. Set the felt how you like it and press Save.' })
+      return
+    }
+    const { placed } = placeMany(state, prefs.opening)
+    if (!placed) {
+      setSay({ kind: 'refused', text: 'Your opening is already out, or the table will not take it right now.' })
+      return
+    }
+    dispatch({ type: 'many', list: prefs.opening })
+    setStats((s) => recordWager(s, placed))
+    setSay({ kind: 'bet', text: `Your usual — ${money(placed)} out.` })
+  }, [prefs.opening, state])
+
+  const onSaveOpening = useCallback(() => {
+    const list = Object.entries(state.bets).map(([id, b]) => ({ id, amount: b.amount }))
+    if (!list.length) {
+      setSay({ kind: 'refused', text: 'Put your usual bets out first, then save them.' })
+      return
+    }
+    setPref({ opening: list })
+    setSay({ kind: 'bet', text: `Saved. ${list.length} bets, ${money(list.reduce((s, b) => s + b.amount, 0))}.` })
+  }, [state.bets, setPref])
+
+  /*
+   * The opening, put out again on its own.
+   *
+   * Only on a clean come-out with a fresh tracker, which is the one moment it
+   * makes sense: the bonus row will not take a bet at any other time, and that
+   * is half of what most standing openings are.
+   */
+  useEffect(() => {
+    if (!prefs.autoOpen || !prefs.opening?.length) return
+    if (state.phase !== 'come-out' || state.marked.size || throwing || settling) return
+    if (Object.keys(state.bets).length) return
+    const { placed } = placeMany(state, prefs.opening)
+    if (!placed) return
+    dispatch({ type: 'many', list: prefs.opening })
+    setStats((s) => recordWager(s, placed))
+    setSay({ kind: 'bet', text: `Your usual is out — ${money(placed)}. New shooter coming out.` })
+  }, [prefs.autoOpen, prefs.opening, state, throwing, settling])
 
   // --- the table itself
 
@@ -283,7 +391,7 @@ export default function App() {
         {/* The felt and the dice share one box, so a percentage of it is the
             same place on the cloth for both and they cannot drift apart. */}
         <div className="felt-frame">
-          <Felt onSpot={onSpot} point={state.point} marked={state.marked}>
+          <Felt onSpot={onSpot} point={state.point} marked={state.marked} bonus={state.table.bonus}>
             <g className="on-felt">
               <Puck point={state.point} />
               {Object.entries(state.bets).map(([id, bet]) => {
@@ -337,6 +445,13 @@ export default function App() {
         onRoll={onRoll}
         rolling={!!throwing || !!settling}
         say={say}
+        pressable={pressable}
+        onPress={onPress}
+        opening={prefs.opening}
+        onOpening={onOpening}
+        onSaveOpening={onSaveOpening}
+        autoOpen={prefs.autoOpen}
+        onAutoOpen={(v) => setPref({ autoOpen: v })}
       />
 
       {open === 'rules' && <RulesDialog table={state.table} onClose={() => setOpen(null)} />}
@@ -352,6 +467,8 @@ export default function App() {
         <SettingsDialog
           table={state.table}
           onChange={(t) => dispatch({ type: 'configure', table: t })}
+          prefs={prefs}
+          onPrefs={setPref}
           onNewSession={onNewSession}
           onClose={() => setOpen(null)}
         />

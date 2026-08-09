@@ -15,6 +15,8 @@
  * which move to a box rather than resolve, and they say so.
  */
 
+import { BONUS_PAYTABLES } from './edges.js'
+
 export const POINTS = [4, 5, 6, 8, 9, 10]
 
 // --------------------------------------------------------------- payout tables
@@ -402,33 +404,35 @@ for (let a = 1; a <= 6; a++) {
  * the seven that ends it.
  */
 /*
- * The pay table is the one thing on this felt that moves house to house.
- * 30/30/150 is what the reference photograph prints; 31/31/150 and 34/34/175
- * are both out there, and the difference is worth about two points of edge on
- * the small bets. Changing it is these three numbers, and the audit in
- * scripts/sim.mjs will tell you what you have done to the edge.
+ * The one bet on this felt whose price moves house to house, so the rate is
+ * not baked in here - it comes from the table, and edges.js works out what
+ * that costs. 30 to 1 is the reference photograph and what most houses run;
+ * 34 to 1 turns it from one of the worst bets on the layout into one of the
+ * better long shots. A table printing "31 FOR 1" is printing 30 to 1: "for
+ * one" includes the stake coming back and "to one" does not.
  */
 export const BONUS = {
-  little: { numbers: [2, 3, 4, 5, 6], pays: [30, 1] },
-  big: { numbers: [8, 9, 10, 11, 12], pays: [30, 1] },
-  all: { numbers: [2, 3, 4, 5, 6, 8, 9, 10, 11, 12], pays: [150, 1] },
+  little: { numbers: [2, 3, 4, 5, 6] },
+  big: { numbers: [8, 9, 10, 11, 12] },
+  all: { numbers: [2, 3, 4, 5, 6, 8, 9, 10, 11, 12] },
 }
 
-for (const [id, { numbers, pays }] of Object.entries(BONUS)) {
+for (const [id, { numbers }] of Object.entries(BONUS)) {
   def({
     id,
     label: { little: 'Little Ones', big: 'Big Ones', all: 'Boom or Bust' }[id],
     group: 'bonus',
     numbers,
-    pays,
     // Always working, come-out included - the come-out roll is where most of
     // these numbers get marked off.
     worksOnComeOut: true,
-    settle: (r, { marked }) => {
+    settle: (r, { marked, bonus = '30' }) => {
       if (r.total === 7) return lose()
       // Complete once every number on the list has been marked, which the
       // table has already done for this roll by the time we are asked.
-      return numbers.every((n) => marked.has(n)) ? win(ratio(r.amount, pays)) : RIDES
+      return numbers.every((n) => marked.has(n))
+        ? win(r.amount * BONUS_PAYTABLES[bonus].pays[id])
+        : RIDES
     },
   })
 }

@@ -18,7 +18,7 @@ import {
   betDef,
   betsInGroup,
 } from '../lib/bets.js'
-import { EDGES, asPercent } from '../lib/edges.js'
+import { BONUS_CHANCE, BONUS_PAYTABLES, EDGES, asPercent, bonusEdge } from '../lib/edges.js'
 import { ODDS_OPTIONS, rangeFor, unitFor } from '../lib/limits.js'
 import { money } from '../lib/bank.js'
 import { duration } from '../lib/storage.js'
@@ -64,9 +64,14 @@ export function Dialog({ title, subtitle, onClose, children, wide }) {
 
 const ratio = ([n, d]) => (d === 1 ? `${n}:1` : `${n}:${d}`)
 
+// The bonus row's cost follows the table's pay table; everything else is
+// fixed by the layout.
+const cost = (id, table) =>
+  BONUS_CHANCE[id] !== undefined ? bonusEdge(id, table.bonus) : EDGES[id]
+
 // What a bet pays, said the way a table says it. Read off the same payout
 // tables the settlement uses.
-function paysFor(id) {
+function paysFor(id, bonus = '30') {
   const d = betDef(id)
   const n = d.number
   switch (d.group) {
@@ -87,7 +92,7 @@ function paysFor(id) {
     case 'hop':
       return d.hard ? '30:1' : '15:1'
     case 'bonus':
-      return ratio(BONUS[id].pays)
+      return `${BONUS_PAYTABLES[bonus].pays[id]}:1`
     default:
       return { any7: '4:1', anycraps: '7:1', aces: '30:1', boxcars: '30:1', acedeuce: '15:1', yo: '15:1' }[id]
         ?? (id === 'horn' ? 'Four bets in one — the winning quarter pays its own rate' : 'Two bets in one — 7:1 on craps, 15:1 on the eleven')
@@ -102,12 +107,44 @@ const NOTES = {
   'pass-odds': 'The one bet in the house with no edge at all. It pays what the number is genuinely worth, which is why the table caps it.',
   'dontpass-odds': 'Laying the odds: risk more to win less, because once a point is out the don’t side is the favourite.',
   field: 'One roll. Wins on 2, 3, 4, 9, 10, 11 and 12 — which is seven numbers out of eleven and still a bad bet, because the four it loses to are the four most likely.',
-  any7: 'One roll. The most expensive bet on the table.',
+  any7: 'One roll, and the most expensive bet on the table. It pays 4:1 where Any Craps pays 7:1, and it is still the worse of the two — see below.',
+  anycraps: 'One roll: the 2, the 3 or the 12.',
   horn: 'Four bets in one chip, so it wants four dollars. Three quarters lose whatever happens.',
   ce: 'Two bets in one chip. Half on craps, half on the eleven.',
-  little: 'Every one of 2, 3, 4, 5 and 6 before a seven. Goes up before the come-out and any seven ends it.',
-  big: 'Every one of 8, 9, 10, 11 and 12 before a seven.',
-  all: 'All ten numbers before a seven. Comes in about once in five hundred shooters.',
+  little: 'Every one of 2, 3, 4, 5 and 6 before a seven. Goes up on a clean come-out and any seven ends it — about one shooter in thirty eight gets there.',
+  big: 'Every one of 8, 9, 10, 11 and 12 before a seven. The same bet, the other end of the felt.',
+  all: 'All ten numbers before a seven. One shooter in a hundred and ninety.',
+}
+
+/*
+ * Why a bet that pays more can still be the worse bet.
+ *
+ * The question Any 7 and Any Craps raise, and the one thing about a pay table
+ * that is genuinely counter-intuitive - so it gets said properly rather than
+ * left for the percentages to imply.
+ */
+function WhyPayoutIsNotPrice() {
+  return (
+    <>
+      <h3>Why the bigger payout can be the worse bet</h3>
+      <p>
+        Any Seven pays <strong>4:1</strong>. Any Craps pays <strong>7:1</strong> — nearly twice as much —
+        and yet Any Craps costs 11.1% against Any Seven&rsquo;s 16.7%. The payout is not the price.
+      </p>
+      <p>
+        A seven comes up six ways in thirty six, so it is a 1-in-6 shot and true odds are <strong>5:1</strong>.
+        Craps comes up four ways, so it is 1-in-9 and true odds are <strong>8:1</strong>. Both bets pay
+        exactly one unit less than they should: 4 where 5 is owed, 7 where 8 is owed. The house keeps the
+        same single unit either way.
+      </p>
+      <p>
+        What differs is what that unit is a share <em>of</em>. One unit out of six is 16.7%; one unit out of
+        nine is 11.1%. The bigger payout spreads the same shortfall over more money, so the bet that looks
+        more generous is the cheaper one. This is the whole shape of a craps pay table: read the gap
+        between what a bet pays and what it is worth, never the payout on its own.
+      </p>
+    </>
+  )
 }
 
 const GROUPS = [
@@ -162,8 +199,10 @@ export function RulesDialog({ table, onClose }) {
                     <th scope="row">
                       {g.key === 'hop' ? (d.hard ? 'Any double' : 'Any easy way') : d.label}
                     </th>
-                    <td>{paysFor(id)}</td>
-                    <td className={EDGES[id] === 0 ? 'is-free' : 'is-cost'}>{asPercent(EDGES[id])}</td>
+                    <td>{paysFor(id, table.bonus)}</td>
+                    <td className={cost(id, table) === 0 ? 'is-free' : 'is-cost'}>
+                      {asPercent(cost(id, table))}
+                    </td>
                     <td>
                       {/* Odds have no increment of their own - it comes from
                           whatever the point turned out to be, so quoting one
@@ -195,6 +234,17 @@ export function RulesDialog({ table, onClose }) {
               <strong>{betDef(id).label}.</strong> {NOTES[id]}
             </p>
           ))}
+          {g.key === 'centre' && <WhyPayoutIsNotPrice />}
+          {g.key === 'bonus' && (
+            <p className="note">
+              This table pays <strong>{BONUS_PAYTABLES[table.bonus].label}</strong>. A house printing{' '}
+              <strong>{BONUS_PAYTABLES[table.bonus].also}</strong> is printing the same bet — &ldquo;for
+              one&rdquo; includes your stake coming back and &ldquo;to one&rdquo; does not, so 31 for 1 and
+              30 to 1 are the same money. The rate itself does differ house to house, and it matters: at
+              30 to 1 these are the most expensive bets on the layout, and at 34 to 1 they are among the
+              better long shots. You can change it under Table.
+            </p>
+          )}
         </section>
       ))}
     </Dialog>
@@ -260,7 +310,7 @@ export function StatsDialog({ stats, rail, onReset, onClose }) {
 
 // --------------------------------------------------------------- the table
 
-export function SettingsDialog({ table, onChange, onNewSession, onClose }) {
+export function SettingsDialog({ table, onChange, prefs, onPrefs, onNewSession, onClose }) {
   const set = (patch) => onChange({ ...table, ...patch })
 
   return (
@@ -295,6 +345,35 @@ export function SettingsDialog({ table, onChange, onNewSession, onClose }) {
         </select>
       </label>
       <p className="note">{ODDS_OPTIONS.find((o) => String(o.id) === String(table.odds))?.note}</p>
+
+      <label className="field">
+        <span>Little, Big and Boom</span>
+        <select value={table.bonus} onChange={(e) => set({ bonus: e.target.value })}>
+          {Object.entries(BONUS_PAYTABLES).map(([key, p]) => (
+            <option key={key} value={key}>{p.label}</option>
+          ))}
+        </select>
+      </label>
+      <p className="note">
+        The one price on this felt that genuinely differs house to house, and it is worth ten points of
+        edge: {asPercent(bonusEdge('little', table.bonus))} on Little and Big at this table
+        {table.bonus === '30' ? ', against 7.76% at a house paying 34 to 1' : ', against 18.30% at a house paying 30 to 1'}.
+        A table printing &ldquo;{BONUS_PAYTABLES[table.bonus].also}&rdquo; is printing the same thing.
+      </p>
+
+      <label className="field">
+        <span>The line rides when it wins</span>
+        <input
+          type="checkbox"
+          checked={!!prefs.lineRides}
+          onChange={(e) => onPrefs({ lineRides: e.target.checked })}
+        />
+      </label>
+      <p className="note">
+        What happens at a table: the dealer pays your pass line by setting an equal stack beside it, you
+        pick up the payout, and the original is still there as your bet for the next come-out. Turn this
+        off and a winning line bet comes all the way back instead.
+      </p>
 
       <p className="note">
         The centre keeps its own minimum of {money(table.propMin)} whatever the line is set to, which is

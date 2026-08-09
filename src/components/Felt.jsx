@@ -31,6 +31,7 @@ import {
   PROP_ROOF,
   SPOTS,
   TRACKERS,
+  bonusPrice,
 } from '../lib/layout.js'
 
 // --------------------------------------------------------------------- dice
@@ -98,7 +99,14 @@ function Shape({ shape, ...rest }) {
 
 // ---------------------------------------------------------------- the felt
 
-export default function Felt({ onSpot, point, marked = new Set(), disabled = new Set(), children }) {
+export default function Felt({
+  onSpot,
+  point,
+  marked = new Set(),
+  disabled = new Set(),
+  bonus = '30',
+  children,
+}) {
   const hit = (id) => ({
     className: `spot spot-${id}${disabled.has(id) ? ' is-shut' : ''}`,
     onClick: onSpot ? (e) => { e.stopPropagation(); onSpot(id) } : undefined,
@@ -220,7 +228,11 @@ export default function Felt({ onSpot, point, marked = new Set(), disabled = new
             <Shape shape={SPOTS[b.id].shape} {...hit(b.id)} />
             <text className="t-bonus" x={b.x + b.w / 2} y={150} textAnchor="middle">{b.label}</text>
             <text className="t-bonus-note" x={b.x + b.w / 2} y={166} textAnchor="middle">{b.note}</text>
-            <text className="t-bonus-pays" x={b.x + b.w / 2} y={189} textAnchor="middle">{b.pays}</text>
+            {/* Printed from the table's own pay table, so the felt can never
+                advertise a price the engine will not pay. */}
+            <text className="t-bonus-pays" x={b.x + b.w / 2} y={189} textAnchor="middle">
+              {bonusPrice(b.id, bonus)}
+            </text>
           </g>
         ))}
 

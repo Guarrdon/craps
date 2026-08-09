@@ -136,7 +136,7 @@ const FRAME = 4 // steps per rendered frame, so playback is 60 a second
 const MAX_STEPS = 240 * 4 // four seconds, then it is over whatever it is doing
 
 const GRAVITY = -5200 // felt units per second squared
-const RESTITUTION = 0.34 // felt does not give much back
+const RESTITUTION = 0.46 // felt does not give much back, but it gives some
 /*
  * Below this closing speed a contact does not bounce at all.
  *
@@ -151,8 +151,8 @@ const RESTING = 110
 const FRICTION = 0.5
 const LINEAR_DAMP = 0.997
 const ANGULAR_DAMP = 0.99
-const CONTACT_DRAG = 0.93
-const CONTACT_SPIN_DRAG = 0.9
+const CONTACT_DRAG = 0.94
+const CONTACT_SPIN_DRAG = 0.918
 const SLEEP_SPEED = 20
 const SLEEP_SPIN = 1.6
 const SLEEP_FRAMES = 12
@@ -173,11 +173,14 @@ function initial(rng) {
   // at this end of the table would. The spread is wide enough that no two
   // throws look alike and tight enough that both dice stay on the felt.
   const spread = () => rng.next() * 2 - 1
-  return [0, 1].map((i) => ({
-    p: [TRAY.x1 - 40 + spread() * 26, TRAY.y1 - 30 + spread() * 22, 150 + rng.next() * 60],
-    v: [-660 - rng.next() * 260, -430 - rng.next() * 200, 120 + rng.next() * 140],
+  return [0, 1].map(() => ({
+    p: [TRAY.x1 - 34 + spread() * 24, TRAY.y1 - 26 + spread() * 20, 168 + rng.next() * 74],
+    // Hard enough to reach the back wall and come off it, which is what a
+    // stickman is asking for when they tell you to hit the back. A throw that
+    // dies where it lands is a throw the box would call short.
+    v: [-980 - rng.next() * 360, -640 - rng.next() * 280, 210 + rng.next() * 180],
     q: qnorm([rng.next() * 2 - 1, rng.next() * 2 - 1, rng.next() * 2 - 1, rng.next() * 2 - 1]),
-    w: [spread() * 26, spread() * 26, spread() * 26],
+    w: [spread() * 46, spread() * 46, spread() * 46],
     asleep: 0,
   }))
 }

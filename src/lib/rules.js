@@ -52,7 +52,13 @@ export function resolveRoll(prev, roll) {
     shooter: { ...prev.shooter },
   }
   const events = []
-  const ctx = { point: state.point, marked: state.marked, phase: state.phase }
+  const ctx = {
+    point: state.point,
+    marked: state.marked,
+    phase: state.phase,
+    // The bonus row's rate is the table's, not the catalogue's.
+    bonus: state.table?.bonus ?? '30',
+  }
 
   const wasComeOut = state.phase === 'come-out'
   const comingOutPoint = state.point

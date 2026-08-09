@@ -16,7 +16,8 @@
  * same felt as a desktop, smaller.
  */
 
-import { BETS, BONUS } from './bets.js'
+import { BETS } from './bets.js'
+import { BONUS_PAYTABLES } from './edges.js'
 
 export const FELT = { w: 1500, h: 860 }
 
@@ -228,13 +229,15 @@ export const BONUS_WATCHES = {
   all: [2, 3, 4, 5, 6, 8, 9, 10, 11, 12],
 }
 
-// The printed price comes from the pay table rather than being typed out
-// again here, so the felt cannot advertise something the engine will not pay.
+// The printed price is not fixed here - the bonus row runs whichever pay
+// table this table runs, and the felt has to print that one.
 export const BONUS_BOXES = [
   { id: 'little', x: 1062, w: 130, label: 'LITTLE ONES', note: '(2,3,4,5,6)' },
   { id: 'all', x: 1200, w: 130, label: 'BOOM OR BUST', note: 'all ten' },
   { id: 'big', x: 1338, w: 130, label: 'BIG ONES', note: '(8,9,10,11,12)' },
-].map((b) => ({ ...b, pays: `${BONUS[b.id].pays[0]} to ${BONUS[b.id].pays[1]}` }))
+]
+
+export const bonusPrice = (id, paytable = '30') => `${BONUS_PAYTABLES[paytable].pays[id]} to 1`
 
 for (const t of BONUS_BOXES) {
   spot(t.id, { type: 'rect', x: t.x, y: 128, w: t.w, h: 70, rx: 4 }, [t.x + t.w / 2, 182], {
