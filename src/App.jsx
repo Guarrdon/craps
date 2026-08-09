@@ -389,6 +389,14 @@ export default function App() {
           <span>{money(rail)}</span>
           <span className="top-dim">{state.phase === 'come-out' ? 'Coming out' : `Point ${state.point}`}</span>
         </div>
+
+        {/* What the two colours on the felt mean. A real layout's colours are
+            its own branding and say nothing; this one's say how long a bet
+            lives, which is the thing the felt otherwise hides. */}
+        <ul className="legend" aria-label="What the colours mean">
+          <li className="is-riding"><i /> Rides</li>
+          <li className="is-oneroll"><i /> One throw</li>
+        </ul>
         <nav>
           {/* Training mode. A click on the felt asks what the spot is instead
               of putting money on it, which is the difference between a rules

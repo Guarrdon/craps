@@ -12,8 +12,10 @@
  * at a breakpoint because there are no breakpoints.
  */
 
+import { betDef } from '../lib/bets.js'
 import {
   ANY_CRAPS,
+  APRON,
   BAND_EDGES,
   BAND_END,
   BONUS_BOXES,
@@ -107,8 +109,21 @@ export default function Felt({
   bonus = '30',
   children,
 }) {
+  /*
+   * Every clickable region, coloured by how long it lives.
+   *
+   * A real layout's colours are its own branding and mean nothing - and this
+   * one's, taken off the photograph, were actively misleading: the COME box
+   * was red like the one-roll props even though it rides, and the field was
+   * gold like the box numbers even though it is decided on the very next
+   * throw. Those are the two people get wrong.
+   *
+   * So gold rides, red is gone in one throw, and cream is not a bet at all.
+   */
   const hit = (id) => ({
-    className: `spot spot-${id}${disabled.has(id) ? ' is-shut' : ''}`,
+    className: `spot spot-${id} ${betDef(id).oneRoll ? 'is-oneroll' : 'is-riding'}${
+      disabled.has(id) ? ' is-shut' : ''
+    }`,
     onClick: onSpot ? (e) => { e.stopPropagation(); onSpot(id) } : undefined,
     tabIndex: onSpot ? 0 : undefined,
     role: onSpot ? 'button' : undefined,
@@ -147,17 +162,26 @@ export default function Felt({
         {/* Closed off where this end of the table stops. Without it the three
             lines simply run out, and a layout that runs out looks unfinished
             rather than bounded. */}
-        <path className="band-edge" d={`M ${BAND_END} 722 L ${BAND_END} 848`} />
-        <text className="t-line" x={470} y={825} textAnchor="middle">PASS LINE</text>
-        <text className="t-line" transform="translate(53 430) rotate(-90)" textAnchor="middle">PASS LINE</text>
-        <text className="t-dont" x={420} y={756} textAnchor="middle">DON&rsquo;T PASS BAR</text>
-        <text className="t-dont" transform="translate(116 430) rotate(-90)" textAnchor="middle">DON&rsquo;T PASS BAR</text>
-        <DicePair x={570} y={749} faces={[6, 6]} size={18} />
+        <path className="band-edge" d={`M ${BAND_END} 686 L ${BAND_END} 812`} />
+        <text className="t-line" x={470} y={789} textAnchor="middle">PASS LINE</text>
+        <text className="t-line" transform="translate(53 420) rotate(-90)" textAnchor="middle">PASS LINE</text>
+        <text className="t-dont" x={420} y={720} textAnchor="middle">DON&rsquo;T PASS BAR</text>
+        <text className="t-dont" transform="translate(116 420) rotate(-90)" textAnchor="middle">DON&rsquo;T PASS BAR</text>
+        <DicePair x={570} y={713} faces={[6, 6]} size={18} />
 
         {/* The click targets for those two bands: the centreline of each,
             stroked at the band's full width and painted with nothing. */}
         <Shape shape={SPOTS.pass.shape} {...hit('pass')} />
         <Shape shape={SPOTS.dontpass.shape} {...hit('dontpass')} />
+
+        {/* Behind the line. Nothing is printed here on a real layout, so it is
+            a hint rather than a marking - dashed, dim, and only really visible
+            when you are looking for somewhere to put your odds. */}
+        <Shape shape={SPOTS['pass-odds'].shape} {...hit('pass-odds')} />
+        <rect className="apron-hint" x={APRON.x} y={APRON.y} width={APRON.w} height={APRON.h} rx={8} />
+        <text className="t-apron" x={APRON.x + APRON.w / 2} y={APRON.y + 27} textAnchor="middle">
+          ODDS &mdash; BEHIND THE LINE
+        </text>
 
         {/* The box. The strip along the top is where a don't come bet or a lay
             goes; the number itself carries the place, buy and come bets. */}
@@ -185,23 +209,23 @@ export default function Felt({
         <DicePair x={226} y={188} faces={[6, 6]} size={19} />
 
         <Shape shape={SPOTS.come.shape} {...hit('come')} />
-        <text className="t-come" x={563} y={330} textAnchor="middle">COME</text>
+        <text className="t-come" x={563} y={320} textAnchor="middle">COME</text>
 
         {/* The field, with its two doubling ends ringed the way the felt rings
             them. This table pays double on both, which is printed rather than
             assumed - plenty of tables pay triple on the twelve. */}
         <Shape shape={SPOTS.field.shape} {...hit('field')} />
-        <text className="t-field-n" x={563} y={614} textAnchor="middle">3 &middot; 4 &middot; 9 &middot; 10 &middot; 11</text>
-        <text className="t-field" x={563} y={664} textAnchor="middle">FIELD</text>
+        <text className="t-field-n" x={563} y={586} textAnchor="middle">3 &middot; 4 &middot; 9 &middot; 10 &middot; 11</text>
+        <text className="t-field" x={563} y={636} textAnchor="middle">FIELD</text>
         <g className="field-end">
-          <circle cx={250} cy={604} r={34} />
-          <text className="t-field-big" x={250} y={617} textAnchor="middle">2</text>
-          <text className="t-double" x={250} y={548} textAnchor="middle">PAYS DOUBLE</text>
+          <circle cx={250} cy={576} r={34} />
+          <text className="t-field-big" x={250} y={589} textAnchor="middle">2</text>
+          <text className="t-double" x={250} y={522} textAnchor="middle">PAYS DOUBLE</text>
         </g>
         <g className="field-end">
-          <circle cx={877} cy={604} r={34} />
-          <text className="t-field-big" x={877} y={617} textAnchor="middle">12</text>
-          <text className="t-double" x={877} y={548} textAnchor="middle">PAYS DOUBLE</text>
+          <circle cx={877} cy={576} r={34} />
+          <text className="t-field-big" x={877} y={589} textAnchor="middle">12</text>
+          <text className="t-double" x={877} y={522} textAnchor="middle">PAYS DOUBLE</text>
         </g>
 
         {/* C and E, dotted down the rail so there is a pair within reach of

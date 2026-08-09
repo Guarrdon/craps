@@ -212,17 +212,56 @@ body {
   transition: fill 120ms ease;
 }
 
+/*
+ * Gold rides. Red is gone in one throw.
+ *
+ * A real layout's colours are its own branding and carry no meaning, and the
+ * ones taken off the photograph were worse than meaningless - the COME box was
+ * red like the one-roll props even though it rides for as long as the line
+ * does, and the field was gold like the box numbers even though it is decided
+ * on the very next throw. Those two are exactly the ones people get wrong.
+ *
+ * So the felt now says it. Everything that survives a throw is gold, everything
+ * settled by the next one is red, and cream is reserved for what is not a bet
+ * at all: the payouts, the printed dice, the trackers, the structure.
+ */
+.spot.is-riding { stroke: var(--gold); }
+.spot.is-oneroll { stroke: var(--red); }
+
+.spot.is-riding:hover,
+.spot.is-riding:focus-visible { fill: rgba(233, 200, 119, 0.18); }
+.spot.is-oneroll:hover,
+.spot.is-oneroll:focus-visible { fill: rgba(226, 59, 63, 0.2); }
+
 .spot:hover,
 .spot:focus-visible {
   fill: rgba(244, 236, 224, 0.14);
   outline: none;
 }
 
-/* The printed edges of the two line bands. The felt between them is the bet. */
+/* The printed edges of the two line bands. The felt between them is the bet,
+   and the line rides, so they are gold like everything else that does. */
 .band-edge {
   fill: none;
-  stroke: var(--print);
+  stroke: var(--gold);
   stroke-width: var(--stroke);
+}
+
+/* Behind the line. Nothing is printed here on a real layout, so this is a hint
+   rather than a marking: dashed and dim, and really only visible when you are
+   looking for somewhere to put your odds. */
+.apron-hint {
+  fill: none;
+  stroke: rgba(233, 200, 119, 0.32);
+  stroke-width: 1.6;
+  stroke-dasharray: 7 7;
+}
+
+.t-apron {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  fill: rgba(233, 200, 119, 0.42);
+  font-weight: 600;
 }
 
 /* The bands themselves are click targets and nothing more: a centreline
@@ -233,7 +272,7 @@ body {
    and it would sit under the whole layout catching everything. */
 .spot-pass,
 .spot-dontpass {
-  stroke: transparent;
+  stroke: transparent !important;
   fill: none;
   pointer-events: stroke;
 }
@@ -242,7 +281,7 @@ body {
 .spot-dontpass:hover,
 .spot-pass:focus-visible,
 .spot-dontpass:focus-visible {
-  stroke: rgba(244, 236, 224, 0.16);
+  stroke: rgba(233, 200, 119, 0.2) !important;
 }
 
 .spot.is-shut {
@@ -254,6 +293,50 @@ body {
 }
 
 /* ------------------------------------------------------------------ text */
+
+/*
+ * Gold rides. Red is gone in one throw. Cream is not a bet.
+ *
+ * One block, at `.print .t-*` specificity, because `.print text` sets the
+ * default fill and beats a bare class - which is how every one of these ended
+ * up cream the first time, including the box numbers, without anything in the
+ * source looking wrong. Kept together rather than scattered across the type
+ * rules so the scheme can be read in one place and a bet cannot quietly end up
+ * the wrong colour.
+ */
+.print .t-line,
+.print .t-dont,
+.print .t-dontcome,
+.print .t-come,
+.print .t-box,
+.print .t-bonus,
+.print .t-bonus-pays {
+  fill: var(--gold);
+}
+
+.print .t-field,
+.print .t-field-n,
+.print .t-field-big,
+.print .t-seven,
+.print .t-anycraps,
+.print .t-horn,
+.print .t-hop,
+.print .t-hop-legend,
+.print .t-ce text {
+  fill: var(--red);
+}
+
+/* The structure: what a bet pays, what the dice look like, which numbers have
+   been thrown. None of it is a wager, so none of it takes a wager's colour. */
+.print .t-pays,
+.print .t-apron {
+  fill: var(--print);
+}
+
+.print .t-double,
+.print .t-bonus-note {
+  fill: var(--print-dim);
+}
 
 .t-line {
   font-size: 38px;
@@ -276,7 +359,6 @@ body {
 .t-box {
   font-size: 62px;
   font-weight: 700;
-  fill: var(--gold);
   letter-spacing: 0.02em;
 }
 
@@ -288,30 +370,30 @@ body {
   letter-spacing: 0;
 }
 
+/* The come rides for as long as the line does, whatever the photograph
+   printed it in. */
 .t-come {
   font-size: 78px;
   letter-spacing: 0.16em;
   font-weight: 700;
-  fill: var(--red);
 }
 
+/* The field is settled by the next throw, whatever company it keeps on the
+   layout. */
 .t-field {
   font-size: 40px;
   letter-spacing: 0.2em;
-  fill: var(--gold);
 }
 
 .t-field-n {
   font-size: 46px;
   letter-spacing: 0.06em;
-  fill: var(--gold);
   font-weight: 700;
 }
 
 .t-field-big {
   font-size: 40px;
   font-weight: 700;
-  fill: var(--gold);
 }
 
 .t-double {
@@ -322,13 +404,14 @@ body {
 
 .field-end circle {
   fill: none;
-  stroke: var(--gold);
+  stroke: var(--red);
   stroke-width: 2.2;
 }
 
 .t-ce text {
   font-size: 15px;
   font-weight: 700;
+  fill: var(--red);
 }
 
 /* ----------------------------------------------------------- the bonus row */
@@ -375,26 +458,19 @@ body {
   font-size: 19px;
   font-style: italic;
   font-weight: 700;
-  fill: var(--gold);
 }
 
 /* ---------------------------------------------------------------- the hops */
 
-.spot[class*='spot-hop'] {
-  stroke: var(--red);
-}
-
 .t-hop {
   font-size: 15px;
   font-weight: 700;
-  fill: var(--red);
 }
 
 .t-hop-legend {
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  fill: var(--red);
 }
 
 /* ------------------------------------------------------------ the prop box */
@@ -409,7 +485,6 @@ body {
   font-size: 30px;
   letter-spacing: 0.14em;
   font-weight: 700;
-  fill: var(--red);
 }
 
 .t-pays {
@@ -422,14 +497,12 @@ body {
   font-size: 15px;
   letter-spacing: 0.05em;
   font-weight: 700;
-  fill: var(--red);
 }
 
 .t-anycraps {
   font-size: 26px;
   letter-spacing: 0.1em;
   font-weight: 700;
-  fill: var(--red);
 }
 
 /* ------------------------------------------------------------------- dice */
@@ -1490,3 +1563,43 @@ kbd {
     pointer-events: none;
   }
 }
+
+/* --------------------------------------------------------------- legend */
+
+/* Two dots and two words. The felt's colours mean something now, and the one
+   thing a scheme like that cannot survive is nobody knowing it is there. */
+.legend {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--print-dim);
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+}
+
+.legend .is-riding { color: var(--gold); }
+.legend .is-oneroll { color: var(--red); }
+
+@media (max-width: 900px) {
+  .legend { display: none; }
+}
+
+.dialog-body .says-rides { color: var(--gold); }
+.dialog-body .says-once { color: #f0787c; }

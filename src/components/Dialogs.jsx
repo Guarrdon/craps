@@ -407,6 +407,31 @@ export function HelpDialog({ onClose }) {
         rest is what the table does back.
       </p>
 
+      <h3>What the colours mean</h3>
+      <p>
+        On a real felt they mean nothing — they are the layout&rsquo;s branding, and on the table this one is
+        drawn from they are actively misleading: the come box is printed red like the one-roll props even
+        though it rides for as long as the line does, and the field is gold like the box numbers even
+        though it is over on the very next throw. Those are the two people get wrong.
+      </p>
+      <p>
+        So here they say something. <strong className="says-rides">Gold rides</strong> — the line, the come,
+        the box, the hardways, the bonus row: bets that live until something decides them.{' '}
+        <strong className="says-once">Red is one throw</strong> — the field, everything in the centre, every
+        hop. Cream is not a bet at all: the payouts, the printed dice, the markers.
+      </p>
+      <p>
+        Which makes the exceptions visible. The hardways sit in the middle of the prop box and are gold,
+        because they ride. The field sits out with the line and is red, because it does not.
+      </p>
+
+      <h3>Behind the line</h3>
+      <p>
+        The strip of cloth below the pass line is the apron, and odds go there — outside your flat bet, not
+        beside it. That is the whole reason the bet is called <em>behind the line</em>: at a table you can
+        read a player&rsquo;s odds off the felt without asking, because they are the only chips out there.
+      </p>
+
       <h3>Putting money down</h3>
       <p>
         A click puts the chip you are holding on the spot you clicked. What it turns into is what the spot

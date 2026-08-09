@@ -386,6 +386,43 @@ try {
   }
 
   /*
+   * --- the colours mean something
+   *
+   * A real layout's colours are its own branding. These say how long a bet
+   * lives, which is the one thing the felt otherwise hides - and the two it
+   * hid worst were the come box, red like the props though it rides, and the
+   * field, gold like the box numbers though it is over on the next throw.
+   */
+  {
+    const paint = await page.evaluate(() => {
+      const spots = [...document.querySelectorAll('.spot')]
+      const both = spots.filter((s) => s.classList.contains('is-riding') && s.classList.contains('is-oneroll'))
+      const neither = spots.filter((s) => !s.classList.contains('is-riding') && !s.classList.contains('is-oneroll'))
+      const colourOf = (sel) => getComputedStyle(document.querySelector(sel)).stroke
+      return {
+        spots: spots.length,
+        both: both.length,
+        neither: neither.length,
+        come: colourOf('.spot-come'),
+        placeSix: colourOf('.spot-place-6'),
+        field: colourOf('.spot-field'),
+        yo: colourOf('.spot-yo'),
+        comeText: getComputedStyle(document.querySelector('.t-come')).fill,
+        fieldText: getComputedStyle(document.querySelector('.t-field')).fill,
+        payout: getComputedStyle(document.querySelector('.t-pays')).fill,
+      }
+    })
+    check('every spot is marked as one or the other', paint.both === 0 && paint.neither === 0,
+      `${paint.spots} spots, ${paint.both} both, ${paint.neither} neither`)
+    check('the come box rides, like the box numbers', paint.come === paint.placeSix, paint.come)
+    check('the field is one throw, like the yo', paint.field === paint.yo, paint.field)
+    check('and the two are not the same colour', paint.come !== paint.field)
+    check('the printed words agree with the outlines', paint.comeText === paint.come && paint.fieldText === paint.field,
+      `come ${paint.comeText} / field ${paint.fieldText}`)
+    check('a payout is neither - it is not a bet', paint.payout !== paint.come && paint.payout !== paint.field, paint.payout)
+  }
+
+  /*
    * --- training mode
    *
    * Point at a spot and be told what it is, rather than betting on it. The

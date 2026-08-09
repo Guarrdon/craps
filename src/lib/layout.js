@@ -25,7 +25,7 @@ export const FELT = { w: 1500, h: 860 }
 
 // The player's end. The line bands wrap its left and bottom edges, so the
 // interior starts inside them.
-const IN = { left: 152, right: 975, top: 25, bottom: 722 }
+const IN = { left: 152, right: 975, top: 25, bottom: 686 }
 
 /*
  * The two line bands.
@@ -38,7 +38,15 @@ const IN = { left: 152, right: 975, top: 25, bottom: 722 }
  * a line and its radius follows, so there is one number to get right instead
  * of six.
  */
-const K = { x: 153, y: 712 } // the centre every corner is struck about
+/*
+ * The centre every corner is struck about.
+ *
+ * Moved up from 712 to leave an apron below the pass line - the strip of cloth
+ * between the line and the rail, where odds go. Without it the line ran to the
+ * very edge of the felt and odds had nowhere to be except beside the flat bet,
+ * which is not where they go and not why the bet is called behind the line.
+ */
+const K = { x: 153, y: 676 }
 export const BAND_END = 1040 // where this end stops and the centre begins
 const line = (x) => {
   const r = K.x - x
@@ -99,14 +107,31 @@ const spot = (id, shape, chip, extra = {}) => {
 
 // --- the line
 
-spot('pass', { type: 'stroke', d: band(53), width: 72 }, [760, 812], { label: 'PASS LINE' })
-spot('dontpass', { type: 'stroke', d: band(116), width: 54 }, [760, 749], { label: "DON'T PASS BAR" })
-// Odds have no printed spot on any layout - they sit behind the flat bet, on
-// the felt outside the line - so the position is inferred rather than drawn.
-spot('pass-odds', null, [672, 812])
-spot('dontpass-odds', null, [672, 749])
+spot('pass', { type: 'stroke', d: band(53), width: 72 }, [760, 776], { label: 'PASS LINE' })
+spot('dontpass', { type: 'stroke', d: band(116), width: 54 }, [700, 713], { label: "DON'T PASS BAR" })
 
-spot('come', { type: 'rect', x: IN.left, y: 232, w: IN.right - IN.left, h: 253, rx: 10 }, [560, 430], {
+/*
+ * Behind the line.
+ *
+ * The apron: the cloth between the pass line and the rail. Odds go here, just
+ * outside your flat bet, and that is the whole reason the bet is called
+ * "behind the line" - at a table you can read a player's odds off the felt
+ * without asking, because they are the only chips out there.
+ *
+ * Nothing is printed on it, on a real layout or this one. It is given a shape
+ * anyway because odds are one of the few bets you place yourself, so it has to
+ * be somewhere you can put a chip.
+ */
+// Left of 280 is where the puck sits when the table is coming out, so the
+// apron starts clear of it.
+export const APRON = { x: 280, y: 814, w: BAND_END - 280, h: 42 }
+spot('pass-odds', { type: 'rect', ...APRON, rx: 8 }, [760, 835], { label: 'Odds' })
+
+// The don't side has no apron of its own: a lay is heeled against the flat bet
+// in the same box, leaning on it, which is exactly where these sit.
+spot('dontpass-odds', null, [620, 713])
+
+spot('come', { type: 'rect', x: IN.left, y: 232, w: IN.right - IN.left, h: 226, rx: 10 }, [560, 410], {
   label: 'COME',
 })
 spot('dontcome', { type: 'rect', x: IN.left, y: BOX.strip, w: 148, h: BOX.foot - BOX.strip, rx: 8 }, [226, 170], {
@@ -151,7 +176,7 @@ BOX_NUMBERS.forEach((n, i) => {
 // Drawn as the reference draws it: a band with its top edge bowed up into the
 // come box, and the two doubling numbers ringed at the ends.
 
-const FIELD = { y: 492, h: 224 }
+const FIELD = { y: 466, h: 220 }
 spot(
   'field',
   {
@@ -163,7 +188,7 @@ spot(
   },
   // Low and left, clear of the numbers printed across the middle and of the
   // ringed two that pays double.
-  [352, 682],
+  [352, 652],
   { label: 'FIELD' },
 )
 
@@ -344,7 +369,7 @@ spot('anycraps', { type: 'rect', ...ANY_CRAPS }, [cx, 726], { label: 'ANY CRAPS'
 // side of the layout when the table is coming out.
 export const PUCK = {
   r: 20,
-  off: [232, 790],
+  off: [222, 835],
   on: Object.fromEntries(BOX_NUMBERS.map((n, i) => [n, [cellMid(i), 56]])),
 }
 

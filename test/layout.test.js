@@ -13,6 +13,7 @@ import {
   PUCK,
   SPOTS,
   SPOT_IDS,
+  APRON,
   TRACKERS,
   TRACKER_ROWS,
   bonusPrice,
@@ -52,13 +53,19 @@ eq('the felt has a spot for every bet and no more', SPOT_IDS.length, BET_IDS.len
 
   /*
    * The bets with no printed spot of their own. Every one is a bet a real
-   * layout does not print either - odds go behind the flat bet, a come bet
-   * that found its number sits in that number's box, a buy is a place bet with
-   * a button on it. Anything else turning up in this list means a bet has
-   * quietly lost its place on the felt.
+   * layout does not print either - a come bet that found its number sits in
+   * that number's box, a buy is a place bet with a button on it, and a lay on
+   * the don't side is heeled against the flat bet it leans on. Anything else
+   * turning up in this list means a bet has quietly lost its place on the felt.
+   *
+   * Pass odds are not in it. A real layout prints nothing there either, but
+   * they go *behind* the line rather than beside it - that is what the name
+   * means - so the apron below the pass line is drawn and takes them. It is
+   * one of the few bets you place yourself, so it has to be somewhere a chip
+   * can go.
    */
   const expected = [
-    'pass-odds', 'dontpass-odds',
+    'dontpass-odds',
     ...POINTS.flatMap((n) => [`buy-${n}`, `come-${n}`, `come-odds-${n}`, `dontcome-${n}`, `dontcome-odds-${n}`]),
   ]
   eq('the unprinted bets are exactly the ones a table does not print',
@@ -169,6 +176,13 @@ check(
   'the puck sits over the middle of the number it marks',
   BOX_NUMBERS.every((n) => PUCK.on[n][0] === BOX_MID[n]),
 )
+// And when the table is coming out it sits clear of the apron, not on top of
+// the odds that go there.
+check('the puck off the point is clear of the apron', PUCK.off[0] + PUCK.r < APRON.x,
+  `${PUCK.off[0]} + ${PUCK.r} vs ${APRON.x}`)
+check('odds behind the line are outside it, not beside it',
+  chipAt('pass-odds')[1] > chipAt('pass')[1] + 30,
+  `line at ${chipAt('pass')[1]}, odds at ${chipAt('pass-odds')[1]}`)
 check(
   'and it does not land on the chips in that box',
   BOX_NUMBERS.every((n) =>
