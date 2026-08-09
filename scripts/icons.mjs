@@ -75,43 +75,44 @@ const mark = (size, { inset = 0.11, round = 0.22 } = {}) => {
  * The same dice on the same cloth, with a suggestion of the layout under them -
  * a cover that is only a logo tells you nothing about what the game is.
  */
+/*
+ * The cover, 4:3, for the shelf.
+ *
+ * The tile crops it, and crops from the bottom - so everything that has to
+ * read sits in the top two thirds and the rest is cloth. A cover with its
+ * subject cut in half is worse than one with empty space in it.
+ *
+ * The dice land in the come box, because that is where they land.
+ */
 const cover = (w = 1200, h = 900) => `
 <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
   <defs>
-    <radialGradient id="cloth" cx="44%" cy="38%" r="74%">
-      <stop offset="0%" stop-color="#94192a"/>
-      <stop offset="58%" stop-color="${CLOTH}"/>
-      <stop offset="100%" stop-color="#2c050a"/>
+    <radialGradient id="cloth" cx="44%" cy="34%" r="76%">
+      <stop offset="0%" stop-color="#96192b"/>
+      <stop offset="56%" stop-color="${CLOTH}"/>
+      <stop offset="100%" stop-color="#29050a"/>
     </radialGradient>
   </defs>
   <rect width="${w}" height="${h}" fill="url(#cloth)"/>
 
   <!-- The box, all six of it. Gold, because every one of these rides. -->
   <g fill="none" stroke="#e9c877" stroke-width="4" opacity="0.55">
-    <rect x="70" y="96" width="1060" height="172" rx="8"/>
-    <path d="M 246 96 v 172 M 423 96 v 172 M 600 96 v 172 M 777 96 v 172 M 953 96 v 172"/>
-    <rect x="70" y="306" width="1060" height="252" rx="16"/>
+    <rect x="70" y="78" width="1060" height="168" rx="8"/>
+    <path d="M 246 78 v 168 M 423 78 v 168 M 600 78 v 168 M 777 78 v 168 M 953 78 v 168"/>
+    <rect x="70" y="286" width="1060" height="300" rx="16"/>
   </g>
-  <g fill="#e9c877" opacity="0.72" font-family="Optima, Palatino, Georgia, serif" font-weight="700" text-anchor="middle">
-    <text x="158" y="216" font-size="102">4</text>
-    <text x="334" y="216" font-size="102">5</text>
-    <text x="511" y="216" font-size="74">Six</text>
-    <text x="688" y="216" font-size="102">8</text>
-    <text x="865" y="216" font-size="74">Nine</text>
-    <text x="1042" y="216" font-size="102">10</text>
-    <text x="600" y="470" font-size="126" letter-spacing="20">COME</text>
+  <g fill="#e9c877" opacity="0.74" font-family="Optima, Palatino, Georgia, serif" font-weight="700" text-anchor="middle">
+    <text x="158" y="196" font-size="100">4</text>
+    <text x="334" y="196" font-size="100">5</text>
+    <text x="511" y="196" font-size="72">Six</text>
+    <text x="688" y="196" font-size="100">8</text>
+    <text x="865" y="196" font-size="72">Nine</text>
+    <text x="1042" y="196" font-size="100">10</text>
+    <text x="470" y="474" font-size="128" letter-spacing="20">COME</text>
   </g>
 
-  <!-- And the field, which is red, because it is over on the next throw. -->
-  <g fill="none" stroke="#e23b3f" stroke-width="4" opacity="0.5">
-    <rect x="70" y="600" width="1060" height="184" rx="14"/>
-  </g>
-  <text x="330" y="716" font-size="86" letter-spacing="16" fill="#e23b3f" opacity="0.72"
-        font-family="Optima, Palatino, Georgia, serif" font-weight="700" text-anchor="middle">FIELD</text>
-
-  <!-- Thrown into the corner of the field, clear of everything printed. -->
-  ${die(830, 700, 178, 4, -15)}
-  ${die(1000, 596, 178, 3, 13)}
+  ${die(852, 470, 186, 4, -15)}
+  ${die(1020, 372, 186, 3, 13)}
 </svg>`
 
 const OUT = [
