@@ -1,13 +1,15 @@
 import { useCallback, useMemo, useReducer, useRef, useState } from 'react'
 import Felt from './components/Felt.jsx'
 import Rail from './components/Rail.jsx'
+import Dice from './components/Dice.jsx'
 import { ChipStack, Puck } from './components/Chips.jsx'
 import { betDef, isWorking } from './lib/bets.js'
 import { OPENING_RAIL, money } from './lib/bank.js'
 import { callFor, ledgerFor } from './lib/calls.js'
 import { chipAt, chipStyleAt } from './lib/layout.js'
 import { check, toLegal, unitFor } from './lib/limits.js'
-import { houseRng } from './lib/rng.js'
+import { throwDice } from './lib/dice.js'
+import { houseRng, makeRng } from './lib/rng.js'
 import { backEverything, newTable, reducer } from './lib/table.js'
 import './styles.css'
 
@@ -29,6 +31,11 @@ export default function App() {
   // printed spot on the felt answers to a click where its chips go, and the
   // counter is what tells a repeat click apart from a click that hit nothing.
   const [pointed, setPointed] = useState(null)
+  // The throw being played back, and where the dice came to rest after the
+  // last one - they stay on the felt until the next throw, as they do at a
+  // table until the stickman pushes them back.
+  const [throwing, setThrowing] = useState(null)
+  const [resting, setResting] = useState(null)
 
   // The house's own source, made once and never seeded. Nothing about how the
   // table is played may reach it.
@@ -131,24 +138,50 @@ export default function App() {
   }, [state.bets])
 
   const onRoll = useCallback(() => {
+    if (throwing) return
     // The shooter has to have a line bet. It is the one rule about who may
     // throw, and it is why the come-out is the only time the line is open.
     if (state.phase === 'come-out' && !state.bets.pass && !state.bets.dontpass) {
       setSay({ kind: 'refused', text: 'The shooter bets the line. Put something on Pass or Don’t Pass first.' })
       return
     }
+
+    /*
+     * The result is drawn first, from crypto, and the throw is then found for
+     * it - see dice.js. The seed only shapes how the dice tumble; it has no
+     * say at all in what they land on.
+     */
     const roll = rng.current.roll()
+    const shape = makeRng(rng.current.int(2 ** 30))
+    const thrown = throwDice(shape, [roll.a, roll.b])
+
+    setSay({ kind: 'throw', text: 'Dice are out.' })
+    setLedger(null)
+    setThrowing({ ...thrown, roll })
+  }, [state, throwing])
+
+  // Nothing is settled until the dice have stopped, the way nothing is settled
+  // at a table until they have. The result was decided before they left the
+  // shooter's hand, but the felt does not move until everyone has seen it.
+  const onLanded = useCallback(() => {
+    if (!throwing) return
+    const { roll } = throwing
     // Resolved here as well as in the reducer, to find out what to say about
     // it. The reducer is pure, so the two cannot disagree.
     const next = reducer(state, { type: 'roll', roll })
     dispatch({ type: 'roll', roll })
     setSay({ kind: 'call', text: callFor(roll, next.lastEvents ?? []) })
     setLedger({ roll, ...ledgerFor(next.lastEvents ?? []) })
-  }, [state])
+    setResting(throwing.resting)
+    setThrowing(null)
+  }, [state, throwing])
 
   return (
     <div className="game">
       <div className="table">
+        {/* The felt and the dice share one box, so a percentage of it is the
+            same place on the cloth for both and they cannot drift apart. */}
+        <div className="felt-frame">
         <Felt onSpot={onSpot} point={state.point} marked={state.marked}>
           <g className="on-felt">
             <Puck point={state.point} />
@@ -171,6 +204,8 @@ export default function App() {
             })}
           </g>
         </Felt>
+        <Dice throwing={throwing} resting={resting} onLanded={onLanded} />
+        </div>
         {ledger?.lines.length > 0 && (
           <ul className="ledger">
             {ledger.lines.map((l, i) => (
@@ -191,6 +226,7 @@ export default function App() {
         onClearAll={onClearAll}
         onTakeDown={onTakeDown}
         onRoll={onRoll}
+        rolling={!!throwing}
         say={say}
       />
 

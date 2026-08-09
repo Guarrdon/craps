@@ -33,6 +33,14 @@ const rail = () => page.locator('.money-big').textContent()
 const bets = () => page.locator('.bets li').count()
 const puck = () => page.locator('.puck text').textContent()
 
+// Throw, and wait for the dice to actually stop. Nothing is settled until they
+// have, so reading the felt before then reads the roll before last.
+const roll = async () => {
+  await page.locator('.roll').click()
+  await page.locator('.roll:not([disabled])').waitFor({ timeout: 15000 })
+  await page.waitForTimeout(30)
+}
+
 try {
   // --- a chip goes down on the line
   await page.locator('.chip-button').nth(2).click() // $25
@@ -47,8 +55,7 @@ try {
   while ((await puck()) === 'OFF' && rolls < 60) {
     // A come-out that wins or loses takes the line bet with it; put it back.
     if ((await bets()) === 0) await clickSpot('pass')
-    await page.locator('.roll').click()
-    await page.waitForTimeout(40)
+    await roll()
     rolls++
   }
   check('a point gets established', (await puck()) !== 'OFF', `after ${rolls} throws`)
@@ -118,12 +125,36 @@ try {
   await page.locator('button:has-text("Keep the box working")').click()
   check('and back on', (await page.locator('.bets li.is-off').count()) === 0)
 
-  // --- roll on, and check the money moves
-  const beforeRoll = await rail()
-  await page.locator('.roll').click()
-  await page.waitForTimeout(60)
-  check('the stickman calls the roll', ((await table.say()) ?? '').trim().length > 0, (await table.say()).trim())
-  check('something happened to the money', (await rail()) !== beforeRoll || (await bets()) >= 0)
+  // --- the throw itself
+  {
+    const beforeRoll = await rail()
+    await page.locator('.roll').click()
+    // Caught in the air, which is also the frame worth photographing.
+    await page.waitForTimeout(260)
+    check('two dice are in the air', (await page.locator('.thrown').count()) === 2)
+    check('and the shooter cannot throw again mid-throw', await page.locator('.roll').isDisabled())
+    check('nothing is settled until they stop', (await rail()) === beforeRoll)
+    mkdirSync(dirname(OUT), { recursive: true })
+    await page.screenshot({ path: OUT.replace(/\.png$/, '-throw.png') })
+
+    await page.locator('.roll:not([disabled])').waitFor({ timeout: 15000 })
+    await page.waitForTimeout(30)
+    check('the stickman calls the roll', ((await table.say()) ?? '').trim().length > 0, (await table.say()).trim())
+    check('the dice stay on the felt afterwards', (await page.locator('.thrown').count()) === 2)
+
+    // Where they came to rest has to be inside the tray. A die that finished
+    // under the prop box would mean the walls are in the wrong place.
+    const inside = await page.evaluate(() => {
+      const frame = document.querySelector('.felt-frame').getBoundingClientRect()
+      return [...document.querySelectorAll('.thrown')].every((d) => {
+        const b = d.getBoundingClientRect()
+        const x = ((b.x + b.width / 2 - frame.x) / frame.width) * 1500
+        const y = ((b.y + b.height / 2 - frame.y) / frame.height) * 860
+        return x > 150 && x < 1000 && y > 200 && y < 520
+      })
+    })
+    check('and they came to rest inside the tray', inside)
+  }
 
   // Leave the felt in a state worth photographing: a point, chips in several
   // places, odds behind the line.
@@ -131,8 +162,7 @@ try {
     await clickSpot('pass')
     let n = 0
     while ((await puck()) === 'OFF' && n++ < 60) {
-      await page.locator('.roll').click()
-      await page.waitForTimeout(30)
+      await roll()
       if ((await bets()) === 0) await clickSpot('pass')
     }
   }

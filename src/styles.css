@@ -61,21 +61,29 @@ body {
     radial-gradient(ellipse at 50% 30%, #3d2415 0%, #1c100a 70%, #120907 100%);
 }
 
-/* The felt keeps its own proportions rather than filling the box it is given,
-   so the wooden rail drawn round it by the box-shadow hugs the cloth instead
-   of framing two strips of empty table. */
-.felt {
+/* The frame keeps the table's own proportions rather than filling the box it
+   is given, so the wooden rail drawn round it hugs the cloth instead of
+   framing two strips of empty table. The felt and the dice both fill the
+   frame, which is what lets the dice be positioned as percentages of it. */
+.felt-frame {
+  position: relative;
   aspect-ratio: 1500 / 860;
   width: min(100%, calc((100cqh - 2px) * 1500 / 860));
   max-width: 100%;
   max-height: 100%;
-  display: block;
   border-radius: clamp(10px, 1.6vw, 22px);
   box-shadow:
     0 0 0 clamp(6px, 1.1vw, 14px) var(--rail-edge),
     0 0 0 clamp(9px, 1.5vw, 19px) var(--rail),
-    0 18px 50px rgba(0, 0, 0, 0.7),
-    inset 0 0 90px rgba(0, 0, 0, 0.45);
+    0 18px 50px rgba(0, 0, 0, 0.7);
+}
+
+.felt {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.45);
 }
 
 /* A readout of the last spot pointed at. Scaffolding while the felt is being
@@ -455,6 +463,56 @@ body {
 
 .puck.is-on text {
   fill: #2b1810;
+}
+
+/* ------------------------------------------------------------------ dice */
+
+/* The dice sit in their own layer over the felt, laid out in percentages of
+   it. The felt keeps a fixed aspect ratio, so a percentage of the box is a
+   fixed place on the cloth and the two can never drift apart. */
+.dice {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  perspective: 1400px;
+  /* The layer fills the felt exactly, so 1cqw here is a hundredth of the
+     table's width - which is what lets a die be sized and its faces pushed
+     apart in the same unit as its position. */
+  container-type: size;
+}
+
+.thrown {
+  position: absolute;
+  width: var(--side);
+  aspect-ratio: 1;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.thrown-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 16%;
+  background: linear-gradient(150deg, #fffdf8 0%, #f2ebdc 62%, #ded4c0 100%);
+  box-shadow: inset 0 0 0 1px rgba(90, 60, 40, 0.22);
+  backface-visibility: hidden;
+}
+
+.thrown-pip {
+  position: absolute;
+  width: 24%;
+  height: 24%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #8e1420 0%, #63080f 70%, #45040a 100%);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+
+.thrown-shadow {
+  position: absolute;
+  aspect-ratio: 1 / 0.62;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0) 72%);
+  pointer-events: none;
 }
 
 /* ---------------------------------------------------------------- ledger */

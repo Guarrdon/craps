@@ -10,7 +10,7 @@
     "sim": "node scripts/sim.mjs",
     "shot": "node scripts/shot.mjs",
     "probe": "node scripts/probe.mjs",
-    "test": "node test/rng.test.js && node test/bets.test.js && node test/limits.test.js && node test/rules.test.js && node test/session.test.js && node test/bank.test.js && node test/layout.test.js"
+    "test": "node test/rng.test.js && node test/bets.test.js && node test/limits.test.js && node test/rules.test.js && node test/session.test.js && node test/bank.test.js && node test/dice.test.js && node test/layout.test.js"
   },
   "type": "module",
   "dependencies": {
