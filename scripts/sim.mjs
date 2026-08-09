@@ -36,7 +36,7 @@ const pad = (s, n) => String(s).padEnd(n)
 const lpad = (s, n) => String(s).padStart(n)
 
 /*
- * What each bet is known to be worth to the house, per bet resolved.
+ * What each bet is known to be worth to the house, per bet made.
  *
  * From src/lib/edges.js, which is the same table the rules screen shows the
  * player - so this run is measuring the engine against exactly what the game
@@ -53,11 +53,11 @@ const EXPECTED = Object.fromEntries(Object.entries(EDGES).filter(([id]) => !SKIP
 /*
  * Play one bet, over and over, and count what it costs.
  *
- * "Per bet resolved" is the convention every published craps figure uses, so
- * that is what is counted here: a place six that wins four times before it
- * loses is five resolved bets, not one. Pushes - the barred twelve, and
- * nothing else - are left out of the denominator, which is also the
- * convention and is why the don't side comes out at 1.364% rather than 1.402%.
+ * "Per bet made" is the convention every published craps figure uses, so that
+ * is what is counted here: a place six that wins four times before it loses is
+ * five bets, not one, and a pushed don't pass is a bet that was made and cost
+ * nothing. Leaving the push out gives 1.403% for the don't side instead of the
+ * 1.364% every source quotes, which is a real difference and not a rounding.
  *
  * Bets that carry a commission are taken down and put back up after every
  * decision, so each resolution pays its own vig. That is the arrangement the
@@ -130,9 +130,18 @@ function measure(id, rolls, seed) {
 
     for (const e of s.lastEvents ?? []) {
       if (!family.includes(e.id)) continue
-      if (e.kind !== 'pay' && e.kind !== 'take') continue // a push is not a decision
+      /*
+       * A push counts.
+       *
+       * The barred twelve is the only one on this layout, and whether it goes
+       * in the denominator is the difference between the 1.364% every source
+       * quotes for the don't side and the 1.403% you get by leaving it out.
+       * The published figure is per bet *made*, and a pushed bet was made - so
+       * it is counted, at zero.
+       */
+      if (!['pay', 'take', 'push'].includes(e.kind)) continue
       const stake = e.amount + vigPaid
-      const profit = (e.kind === 'pay' ? e.pay : -e.amount) - vigPaid
+      const profit = (e.kind === 'pay' ? e.pay : e.kind === 'push' ? 0 : -e.amount) - vigPaid
       wagered += stake
       net += profit
       sumP += profit / stake // as a fraction of the stake, so mixed sizes compose
