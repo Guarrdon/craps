@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Craps in your browser. A Vegas layout with every bet on it, real table limits, and dice that are actually thrown."
+    />
+    <!-- Inline, so the page makes no network request of its own. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%235c0d16'/%3E%3Cg fill='%23fdf8ef'%3E%3Crect x='4' y='11' width='15' height='15' rx='3'/%3E%3Crect x='16' y='5' width='13' height='13' rx='3' transform='rotate(12 22.5 11.5)'/%3E%3C/g%3E%3Cg fill='%234a0d13'%3E%3Ccircle cx='8.5' cy='15.5' r='1.6'/%3E%3Ccircle cx='14.5' cy='21.5' r='1.6'/%3E%3Ccircle cx='11.5' cy='18.5' r='1.6'/%3E%3Ccircle cx='21' cy='9' r='1.5'/%3E%3Ccircle cx='25' cy='14' r='1.5'/%3E%3C/g%3E%3C/svg%3E"
+    />
+    <title>Craps</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <!-- The way back to the portal, and the service worker that keeps this
+         game on the device. Both are served from the portal's own origin with
+         an absolute path, so they simply do not load on a dev server - which
+         is what we want: no exit chip when there is nothing to exit to. -->
+    <script src="/shared/exit-to-portal.js" defer></script>
+    <script src="/shared/offline.js" defer></script>
+  </body>
+</html>

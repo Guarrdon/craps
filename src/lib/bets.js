@@ -401,6 +401,13 @@ for (let a = 1; a <= 6; a++) {
  * history - so the tracker in table.js decides them and settle() only handles
  * the seven that ends it.
  */
+/*
+ * The pay table is the one thing on this felt that moves house to house.
+ * 30/30/150 is what the reference photograph prints; 31/31/150 and 34/34/175
+ * are both out there, and the difference is worth about two points of edge on
+ * the small bets. Changing it is these three numbers, and the audit in
+ * scripts/sim.mjs will tell you what you have done to the edge.
+ */
 export const BONUS = {
   little: { numbers: [2, 3, 4, 5, 6], pays: [30, 1] },
   big: { numbers: [8, 9, 10, 11, 12], pays: [30, 1] },

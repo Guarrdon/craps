@@ -8,7 +8,9 @@
     "preview": "vite preview",
     "deploy": "./scripts/deploy.sh",
     "sim": "node scripts/sim.mjs",
-    "test": "node test/rng.test.js && node test/bets.test.js && node test/limits.test.js && node test/rules.test.js && node test/session.test.js"
+    "shot": "node scripts/shot.mjs",
+    "probe": "node scripts/probe.mjs",
+    "test": "node test/rng.test.js && node test/bets.test.js && node test/limits.test.js && node test/rules.test.js && node test/session.test.js && node test/layout.test.js"
   },
   "type": "module",
   "dependencies": {
@@ -16,8 +18,9 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^6.0.4",
-    "vite": "^8.1.5"
+    "@vitejs/plugin-react": "^6.0.5",
+    "playwright": "^1.62.1",
+    "vite": "^8.2.1"
   },
   "private": true,
   "license": "MIT",

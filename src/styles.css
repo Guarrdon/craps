@@ -1,0 +1,358 @@
+/*
+ * The table.
+ *
+ * Colours are read off the reference photographs rather than picked: the cloth
+ * is a deep burgundy that goes almost black at the rail, the print is a warm
+ * off-white rather than pure white, the box numbers are gold and the come box
+ * is the one thing on the felt in red.
+ */
+
+:root {
+  --cloth: #5c0d16;
+  --rail: #2b1810;
+  --rail-edge: #58351f;
+  --print: #f4ece0;
+  --print-dim: rgba(244, 236, 224, 0.62);
+  --gold: #e9c877;
+  --red: #e23b3f;
+  --stroke: 2.2;
+
+  color-scheme: dark;
+  font-family: 'Optima', 'Palatino Linotype', Palatino, Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #140a08;
+  color: var(--print);
+  overscroll-behavior: none;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ------------------------------------------------------------------ table */
+
+.table {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(8px, 2vw, 28px);
+  /* The rail: a padded wooden edge the felt sits inside. */
+  background:
+    radial-gradient(ellipse at 50% 30%, #3d2415 0%, #1c100a 70%, #120907 100%);
+}
+
+.felt {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  display: block;
+  border-radius: clamp(10px, 1.6vw, 22px);
+  box-shadow:
+    0 0 0 clamp(6px, 1.1vw, 14px) var(--rail-edge),
+    0 0 0 clamp(9px, 1.5vw, 19px) var(--rail),
+    0 18px 50px rgba(0, 0, 0, 0.7),
+    inset 0 0 90px rgba(0, 0, 0, 0.45);
+}
+
+/* A readout of the last spot pointed at. Scaffolding while the felt is being
+   drawn, and what scripts/probe.mjs reads to check every spot answers. */
+.probe {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.72);
+  font: 500 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------- the print */
+
+.print {
+  fill: none;
+  stroke: var(--print);
+  stroke-width: var(--stroke);
+  stroke-linejoin: round;
+  /* Nothing printed on the cloth catches a click. Only the spots below do,
+     and they turn it back on for themselves. Without this the layout is a
+     minefield: a box number, a payout label and a die glyph all sit on top of
+     the region they belong to and would swallow clicks meant for it. */
+  pointer-events: none;
+}
+
+.print text {
+  stroke: none;
+  fill: var(--print);
+  font-weight: 600;
+}
+
+/* Every clickable region. The shape that is drawn is the shape that is
+   clicked, so this is both the outline and the hit area.
+
+   `all` rather than the default, because these shapes are unfilled outlines -
+   a box on a craps layout is a printed rectangle with felt inside it, and the
+   felt inside it is exactly where you put the chips. Left to the default,
+   only the 2px printed border would answer. */
+.spot {
+  cursor: pointer;
+  pointer-events: all;
+  transition: fill 120ms ease;
+}
+
+.spot:hover,
+.spot:focus-visible {
+  fill: rgba(244, 236, 224, 0.14);
+  outline: none;
+}
+
+/* The printed edges of the two line bands. The felt between them is the bet. */
+.band-edge {
+  fill: none;
+  stroke: var(--print);
+  stroke-width: var(--stroke);
+}
+
+/* The bands themselves are click targets and nothing more: a centreline
+   stroked at the band's width, painted with nothing until it is pointed at.
+
+   `stroke` rather than `all`, because these paths are open lines. Their fill
+   region - what a browser imagines if you closed them - is most of the table,
+   and it would sit under the whole layout catching everything. */
+.spot-pass,
+.spot-dontpass {
+  stroke: transparent;
+  fill: none;
+  pointer-events: stroke;
+}
+
+.spot-pass:hover,
+.spot-dontpass:hover,
+.spot-pass:focus-visible,
+.spot-dontpass:focus-visible {
+  stroke: rgba(244, 236, 224, 0.16);
+}
+
+.spot.is-shut {
+  cursor: not-allowed;
+}
+
+.spot.is-shut:hover {
+  fill: rgba(0, 0, 0, 0.22);
+}
+
+/* ------------------------------------------------------------------ text */
+
+.t-line {
+  font-size: 38px;
+  letter-spacing: 0.28em;
+  font-weight: 700;
+}
+
+.t-dont {
+  font-size: 21px;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+}
+
+.t-dontcome {
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.t-box {
+  font-size: 62px;
+  font-weight: 700;
+  fill: var(--gold);
+  letter-spacing: 0.02em;
+}
+
+/* Six and Nine are spelled out on every layout, because a 6 and a 9 are the
+   same glyph from the far side of the table. Spelled out they are wider, so
+   they are set smaller to keep inside the box. */
+.t-box-word {
+  font-size: 44px;
+  letter-spacing: 0;
+}
+
+.t-come {
+  font-size: 78px;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  fill: var(--red);
+}
+
+.t-field {
+  font-size: 40px;
+  letter-spacing: 0.2em;
+  fill: var(--gold);
+}
+
+.t-field-n {
+  font-size: 46px;
+  letter-spacing: 0.06em;
+  fill: var(--gold);
+  font-weight: 700;
+}
+
+.t-field-big {
+  font-size: 40px;
+  font-weight: 700;
+  fill: var(--gold);
+}
+
+.t-double {
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  fill: var(--print-dim);
+}
+
+.field-end circle {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 2.2;
+}
+
+.t-ce text {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ----------------------------------------------------------- the bonus row */
+
+/* The shared markers. One per number, lit when the shooter has thrown it, and
+   wiped by any seven. Big enough to read at a glance, because reading them is
+   the whole of what the bonus row asks of a player. */
+.tracker circle {
+  fill: rgba(0, 0, 0, 0.28);
+  stroke: var(--print-dim);
+  stroke-width: 2;
+  transition: fill 260ms ease, stroke 260ms ease;
+}
+
+.tracker text {
+  font-size: 22px;
+  font-weight: 700;
+  fill: var(--print-dim);
+  stroke: none;
+  transition: fill 260ms ease;
+}
+
+.tracker.is-marked circle {
+  fill: var(--gold);
+  stroke: #fff3d6;
+}
+
+.tracker.is-marked text {
+  fill: #4a0d13;
+}
+
+.t-bonus {
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  font-weight: 700;
+}
+
+.t-bonus-note {
+  font-size: 9.5px;
+  fill: var(--print-dim);
+}
+
+.t-bonus-pays {
+  font-size: 19px;
+  font-style: italic;
+  font-weight: 700;
+  fill: var(--gold);
+}
+
+/* ---------------------------------------------------------------- the hops */
+
+.spot[class*='spot-hop'] {
+  stroke: var(--red);
+}
+
+.t-hop {
+  font-size: 15px;
+  font-weight: 700;
+  fill: var(--red);
+}
+
+.t-hop-legend {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  fill: var(--red);
+}
+
+/* ------------------------------------------------------------ the prop box */
+
+.prop-outline {
+  fill: none;
+  stroke: var(--print);
+  stroke-width: var(--stroke);
+}
+
+.t-seven {
+  font-size: 30px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  fill: var(--red);
+}
+
+.t-pays {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  fill: var(--print);
+}
+
+.t-horn {
+  font-size: 15px;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  fill: var(--red);
+}
+
+.t-anycraps {
+  font-size: 26px;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  fill: var(--red);
+}
+
+/* ------------------------------------------------------------------- dice */
+
+.die rect {
+  fill: #fdf8ef;
+  stroke: none;
+}
+
+.die .pip {
+  fill: #4a0d13;
+  stroke: none;
+}
+
+.die-gold rect {
+  fill: var(--gold);
+}
+
+.die-red rect {
+  fill: #fdf8ef;
+}
+
+.die-red .pip {
+  fill: var(--red);
+}
