@@ -246,6 +246,24 @@ export function check(id, amount, ctx = {}) {
   return yes({ vig })
 }
 
+/*
+ * The nearest amount this spot will actually take, at or above what was asked.
+ *
+ * Dropping a red chip on the six is not a $5 bet, because the six cannot pay
+ * 7:6 on five dollars. What happens at a table is that the dealer says "make
+ * it twelve" and you put another chip down, and this is that: the amount the
+ * click turns into, plus a flag so the interface can say why it changed rather
+ * than quietly taking more money than was asked for.
+ */
+export function toLegal(id, want, ctx = {}) {
+  const { table = DEFAULT_TABLE, point = null, bets = {} } = ctx
+  const unit = unitFor(id, { point })
+  const { min } = rangeFor(id, { table })
+  const standing = bets[id]?.amount ?? 0
+  const total = Math.ceil(Math.max(standing + want, min) / unit) * unit
+  return { add: total - standing, total, bumped: total !== standing + want }
+}
+
 // The house style for money, used in every refusal above and by the interface.
 export const money = (n) =>
   n % 1 === 0 ? `$${n.toLocaleString('en-US')}` : `$${n.toFixed(2)}`

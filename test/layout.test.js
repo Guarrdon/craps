@@ -3,6 +3,7 @@ import { BET_IDS, HOPS, POINTS, betDef } from '../src/lib/bets.js'
 import {
   BONUS_BOXES,
   BOX_LABEL,
+  BOX_MID,
   BOX_NUMBERS,
   FELT,
   HARDWAYS,
@@ -138,8 +139,14 @@ check(
 check('the puck has somewhere to sit for every point', BOX_NUMBERS.every((n) => PUCK.on[n]))
 check('and somewhere to sit when the table is coming out', PUCK.off?.length === 2)
 check(
-  'the puck sits on the number it marks',
-  BOX_NUMBERS.every((n, i) => Math.abs(PUCK.on[n][0] - chipAt(`place-${n}`)[0]) < 1),
+  'the puck sits over the middle of the number it marks',
+  BOX_NUMBERS.every((n) => PUCK.on[n][0] === BOX_MID[n]),
+)
+check(
+  'and it does not land on the chips in that box',
+  BOX_NUMBERS.every((n) =>
+    [`lay-${n}`, `dontcome-${n}`].every((id) => Math.abs(chipAt(id)[0] - PUCK.on[n][0]) > PUCK.r + 10),
+  ),
 )
 
 done('layout')

@@ -16,7 +16,7 @@
  * same felt as a desktop, smaller.
  */
 
-import { BONUS } from './bets.js'
+import { BETS, BONUS } from './bets.js'
 
 export const FELT = { w: 1500, h: 860 }
 
@@ -65,7 +65,31 @@ const cellMid = (i) => BOX_X[i] + (BOX_X[i + 1] - BOX_X[i]) / 2
 // layout from the other side of the table needs to know which is which.
 export const BOX_LABEL = { 4: '4', 5: '5', 6: 'Six', 8: '8', 9: 'Nine', 10: '10' }
 
+// The middle of each box, for the printed number and for the puck.
+export const BOX_MID = Object.fromEntries(BOX_NUMBERS.map((n, i) => [n, cellMid(i)]))
+
 // ------------------------------------------------------------------- spots
+
+/*
+ * How big a chip is where.
+ *
+ * The centre of the table is a dense grid of small compartments - seventeen
+ * hop circles across four hundred pixels - and a chip sized for the pass line
+ * would cover its neighbours. The size is part of the spot rather than
+ * something the interface decides, because it depends on the geometry here.
+ */
+const CHIP_R = { line: 17, odds: 17, field: 17, box: 13, bonus: 12, centre: 12, hardway: 12, hop: 11 }
+
+/*
+ * Whether a stack gets its total written beside it.
+ *
+ * The compartments in the centre are small - a hop circle is 38 across - and a
+ * pill with "25" in it would cover the payout printed under it. Those spots go
+ * without: the chip colour already says what the bet is, which is what chip
+ * colours are for, and the exact number is in the rail. The line, the box and
+ * the field have the room, and there the total earns its place.
+ */
+const LABELLED = new Set(['line', 'odds', 'field', 'box'])
 
 const spots = {}
 const spot = (id, shape, chip, extra = {}) => {
@@ -90,30 +114,35 @@ spot('dontcome', { type: 'rect', x: IN.left, y: BOX.strip, w: 148, h: BOX.foot -
 
 // --- the box
 
+/*
+ * Each box, and the four bets that live in it.
+ *
+ * The number is printed in the upper half and the chips go in the lower, which
+ * is what stops a $42 six from sitting on top of the word Six. Come bets to
+ * the left, place and buy to the right - the same left-to-right convention a
+ * real box uses to keep one player's come bet apart from another's place bet.
+ * A buy sits above its place position, the way it sits under a BUY button.
+ */
 BOX_NUMBERS.forEach((n, i) => {
   const { x, w } = cell(i)
   const mid = cellMid(i)
 
-  // The number itself. A place bet, a come bet that found this number and a
-  // buy all live in here; which is which is a matter of where in the box the
-  // dealer puts the chips, and the chip positions below say where.
-  spot(`place-${n}`, { type: 'rect', x, y: BOX.numbers, w, h: BOX.foot - BOX.numbers }, [mid, 205], {
+  spot(`place-${n}`, { type: 'rect', x, y: BOX.numbers, w, h: BOX.foot - BOX.numbers }, [mid + 30, 204], {
     label: BOX_LABEL[n],
     number: n,
-    box: true,
   })
-  spot(`buy-${n}`, null, [mid - 30, 205], { number: n })
-  spot(`come-${n}`, null, [mid, 150], { number: n })
-  spot(`come-odds-${n}`, null, [mid + 28, 150], { number: n })
+  spot(`buy-${n}`, null, [mid + 30, 174], { number: n, labelAbove: true })
+  spot(`come-${n}`, null, [mid - 30, 204], { number: n })
+  spot(`come-odds-${n}`, null, [mid - 30, 174], { number: n, labelAbove: true })
 
   // The strip above the numbers. Don't come bets and lays sit up here, out of
-  // the way of the box, which is exactly what it is for.
-  spot(`lay-${n}`, { type: 'rect', x, y: BOX.strip, w, h: BOX.numbers - BOX.strip }, [mid - 25, 55], {
+  // the way of the box, which is exactly what it is for - and the puck sits
+  // between them when this number is the point.
+  spot(`lay-${n}`, { type: 'rect', x, y: BOX.strip, w, h: BOX.numbers - BOX.strip }, [mid - 38, 56], {
     number: n,
-    strip: true,
   })
-  spot(`dontcome-${n}`, null, [mid + 25, 55], { number: n })
-  spot(`dontcome-odds-${n}`, null, [mid + 25, 72], { number: n })
+  spot(`dontcome-${n}`, null, [mid + 38, 56], { number: n })
+  spot(`dontcome-odds-${n}`, null, [mid + 38, 74], { number: n })
 })
 
 // --- the field
@@ -131,7 +160,9 @@ spot(
         L ${IN.right} ${FIELD.y + FIELD.h}
         L ${IN.left} ${FIELD.y + FIELD.h} Z`,
   },
-  [560, 640],
+  // Low and left, clear of the numbers printed across the middle and of the
+  // ringed two that pays double.
+  [352, 682],
   { label: 'FIELD' },
 )
 
@@ -248,7 +279,7 @@ export const HOP_LEGEND = { x: HOP_X0 + HOP_STEP * 4.5, y: HOP_Y0 }
 export const PROP_ROOF = `M ${C.left} 395 L ${C.left} 372 L 1140 332 L 1390 332 L ${C.right} 372 L ${C.right} 395 Z`
 export const PROP_BODY = { x: C.left, y: 395, w: C.right - C.left, h: 380 }
 
-spot('any7', { type: 'path', d: PROP_ROOF }, [cx, 370], { label: 'SEVEN', pays: '4 TO 1' })
+spot('any7', { type: 'path', d: PROP_ROOF }, [cx, 381], { label: 'SEVEN', pays: '4 TO 1' })
 
 // The hardways, arranged as the reference arranges them: the two nines to the
 // left, the two sevens to the right.
@@ -265,8 +296,10 @@ export const HARDWAYS = HARD.map((h) => ({
   w: 202,
   h: 78,
 }))
+// The chips go in the upper right of each compartment, clear of the dice
+// printed on the left and the price printed along the bottom.
 for (const h of HARDWAYS) {
-  spot(`hard-${h.n}`, { type: 'rect', x: h.x, y: h.y, w: h.w, h: h.h }, [h.x + h.w - 30, h.y + h.h - 22], {
+  spot(`hard-${h.n}`, { type: 'rect', x: h.x, y: h.y, w: h.w, h: h.h }, [h.x + h.w * 0.73, h.y + 26], {
     label: `HARD ${h.n}`,
     pays: h.pays,
     face: [h.n / 2, h.n / 2],
@@ -289,25 +322,26 @@ export const HORN_SPOTS = HORN_ROWS.map((h) => ({
   h: 66,
 }))
 for (const h of HORN_SPOTS) {
-  spot(h.id, { type: 'rect', x: h.x, y: h.y, w: h.w, h: h.h }, [h.x + h.w / 2, h.y + h.h - 18], {
+  spot(h.id, { type: 'rect', x: h.x, y: h.y, w: h.w, h: h.h }, [h.x + h.w - 26, h.y + 20], {
     pays: h.pays,
     face: h.face,
   })
 }
 
 export const HORN_BOX = { x: 1205, y: 565, w: 120, h: 134 }
-spot('horn', { type: 'rect', ...HORN_BOX, rx: 3 }, [1265, 660], { label: 'HORN BET' })
+spot('horn', { type: 'rect', ...HORN_BOX, rx: 3 }, [1265, 678], { label: 'HORN BET' })
 
 export const ANY_CRAPS = { x: 1062, y: 705, w: 406, h: 70 }
-spot('anycraps', { type: 'rect', ...ANY_CRAPS }, [cx, 750], { label: 'ANY CRAPS', pays: '7 TO 1' })
+spot('anycraps', { type: 'rect', ...ANY_CRAPS }, [cx, 726], { label: 'ANY CRAPS', pays: '7 TO 1' })
 
 // ---------------------------------------------------------------- the puck
 //
 // The ON/OFF button sits on the box number that is the point, and off to the
 // side of the layout when the table is coming out.
 export const PUCK = {
-  off: [232, 780],
-  on: Object.fromEntries(BOX_NUMBERS.map((n, i) => [n, [cellMid(i), 60]])),
+  r: 20,
+  off: [232, 790],
+  on: Object.fromEntries(BOX_NUMBERS.map((n, i) => [n, [cellMid(i), 56]])),
 }
 
 export const SPOTS = spots
@@ -326,6 +360,17 @@ export const DRAWN = SPOT_IDS.filter((id) => spots[id].shape)
  * way to tell three bets on the six apart at a glance.
  */
 export const chipAt = (id) => spots[id]?.chip ?? null
+
+// How a chip stack should be drawn at this spot: how big, whether its total is
+// written out, and which side of the pile that total goes.
+export const chipStyleAt = (id) => ({
+  r: CHIP_R[BETS[id]?.group] ?? 13,
+  total: LABELLED.has(BETS[id]?.group),
+  // Bets stacked in the upper half of a number box - odds heeled on a come
+  // bet, a buy sitting over a place - label upwards, so the total does not
+  // land on the pile below it.
+  above: spots[id]?.labelAbove === true,
+})
 
 // Where to point at a spot to hit it. The same place its chips go, except for
 // the one spot whose chip deliberately sits between two shapes.

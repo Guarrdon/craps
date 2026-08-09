@@ -18,6 +18,7 @@ import {
   BAND_END,
   BONUS_BOXES,
   BOX_LABEL,
+  BOX_MID,
   BOX_NUMBERS,
   CE_PAIRS,
   FELT,
@@ -156,10 +157,12 @@ export default function Felt({ onSpot, point, marked = new Set(), disabled = new
           <g key={n}>
             <Shape shape={SPOTS[`lay-${n}`].shape} {...hit(`lay-${n}`)} />
             <Shape shape={SPOTS[`place-${n}`].shape} {...hit(`place-${n}`)} />
+            {/* Printed in the upper half of the box, so the lower half is
+                free for the chips that go in it. */}
             <text
               className={BOX_LABEL[n].length > 2 ? 't-box t-box-word' : 't-box'}
-              x={SPOTS[`place-${n}`].chip[0]}
-              y={168}
+              x={BOX_MID[n]}
+              y={138}
               textAnchor="middle"
             >
               {BOX_LABEL[n]}
@@ -242,9 +245,9 @@ export default function Felt({ onSpot, point, marked = new Set(), disabled = new
           height={PROP_BODY.h}
         />
         <Shape shape={SPOTS.any7.shape} {...hit('any7')} />
-        <text className="t-seven" x={1265} y={372} textAnchor="middle">SEVEN</text>
-        <text className="t-pays" x={1105} y={374} textAnchor="middle">4 TO 1</text>
-        <text className="t-pays" x={1425} y={374} textAnchor="middle">4 TO 1</text>
+        <text className="t-seven" x={1265} y={360} textAnchor="middle">SEVEN</text>
+        <text className="t-pays" x={1105} y={384} textAnchor="middle">4 TO 1</text>
+        <text className="t-pays" x={1425} y={384} textAnchor="middle">4 TO 1</text>
 
         {HARDWAYS.map((h) => (
           <g key={h.n}>
@@ -266,9 +269,9 @@ export default function Felt({ onSpot, point, marked = new Set(), disabled = new
         <text className="t-horn" x={HORN_BOX.x + HORN_BOX.w / 2} y={HORN_BOX.y + 82} textAnchor="middle">BET</text>
 
         <Shape shape={SPOTS.anycraps.shape} {...hit('anycraps')} />
-        <text className="t-anycraps" x={1265} y={748} textAnchor="middle">ANY CRAPS</text>
-        <text className="t-pays" x={1105} y={748} textAnchor="middle">7 TO 1</text>
-        <text className="t-pays" x={1425} y={748} textAnchor="middle">7 TO 1</text>
+        <text className="t-anycraps" x={1265} y={765} textAnchor="middle">ANY CRAPS</text>
+        <text className="t-pays" x={1105} y={762} textAnchor="middle">7 TO 1</text>
+        <text className="t-pays" x={1425} y={762} textAnchor="middle">7 TO 1</text>
       </g>
 
       {/* Chips, the puck and the dice are laid over the print by whatever is

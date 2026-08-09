@@ -35,7 +35,10 @@ try {
   await ready
   const browser = await chromium.launch()
   const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT } })
-  await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' })
+  // ?probe records what was clicked and bets nothing. What is being measured
+  // here is the felt, and a felt that fills with chips as it is measured is
+  // measuring the chips.
+  await page.goto(`http://localhost:${PORT}/?probe`, { waitUntil: 'networkidle' })
 
   // The felt letterboxes itself inside the viewport, so felt coordinates have
   // to be mapped through where the svg actually ended up.

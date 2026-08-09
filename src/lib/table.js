@@ -11,8 +11,8 @@
  * player should read, not something that should blow up a render.
  */
 
-import { betDef, isWorking, quote } from './bets.js'
-import { check, vigFor } from './limits.js'
+import { POINTS, betDef, isWorking, quote } from './bets.js'
+import { check, maxBet, vigFor } from './limits.js'
 import { newTable, resolveRoll } from './rules.js'
 
 export { newTable }
@@ -25,6 +25,8 @@ export function reducer(state, action) {
       return takeDown(state, action.id)
     case 'working':
       return setWorking(state, action.id, action.on)
+    case 'odds':
+      return backEverything(state).state
     case 'roll':
       return applyRoll(state, action.roll)
     case 'clear':
@@ -111,6 +113,35 @@ export function takeDown(state, id) {
   // The vig on a buy or lay is not refunded. It bought the better price and
   // the price was given.
   return { ...state, bets, bankroll: state.bankroll + returned, refused: null }
+}
+
+/*
+ * "Odds on everything."
+ *
+ * One of the few things a player says out loud rather than reaching out and
+ * doing, and the only sane way to back four come bets and a line bet without
+ * sixteen separate clicks. Each is taken to the table maximum in turn, and the
+ * rail is checked between them - so a player who cannot afford to back all of
+ * them backs as many as the money reaches, starting with the line, which is
+ * the order a dealer would work in anyway.
+ */
+export function backEverything(state) {
+  const ids = [
+    'pass-odds',
+    'dontpass-odds',
+    ...POINTS.flatMap((n) => [`come-odds-${n}`, `dontcome-odds-${n}`]),
+  ]
+  let next = state
+  let backed = 0
+  for (const id of ids) {
+    const most = maxBet(id, ctxFor(next))
+    if (most <= 0) continue
+    const after = placeBet(next, id, most)
+    if (after.refused) continue
+    backed += most
+    next = after
+  }
+  return { state: { ...next, refused: null }, backed }
 }
 
 // Turn a bet on or off for the come-out. Only the ones a dealer would put a

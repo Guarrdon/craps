@@ -42,9 +42,17 @@ body {
 
 /* ------------------------------------------------------------------ table */
 
-.table {
-  flex: 1;
+.game {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 1fr auto;
   min-height: 0;
+}
+
+.table {
+  position: relative;
+  min-height: 0;
+  container-type: size;
   display: grid;
   place-items: center;
   padding: clamp(8px, 2vw, 28px);
@@ -53,9 +61,13 @@ body {
     radial-gradient(ellipse at 50% 30%, #3d2415 0%, #1c100a 70%, #120907 100%);
 }
 
+/* The felt keeps its own proportions rather than filling the box it is given,
+   so the wooden rail drawn round it by the box-shadow hugs the cloth instead
+   of framing two strips of empty table. */
 .felt {
-  width: 100%;
-  height: 100%;
+  aspect-ratio: 1500 / 860;
+  width: min(100%, calc((100cqh - 2px) * 1500 / 860));
+  max-width: 100%;
   max-height: 100%;
   display: block;
   border-radius: clamp(10px, 1.6vw, 22px);
@@ -355,4 +367,384 @@ body {
 
 .die-red .pip {
   fill: var(--red);
+}
+
+/* ------------------------------------------------------- chips on the felt */
+
+.on-felt {
+  pointer-events: none;
+}
+
+.chip text {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.stack {
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.stack-shadow {
+  fill: rgba(0, 0, 0, 0.45);
+}
+
+.stack-total rect {
+  fill: rgba(12, 6, 6, 0.86);
+  stroke: rgba(244, 236, 224, 0.3);
+  stroke-width: 1;
+}
+
+.stack-total text {
+  fill: var(--print);
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* A bet on the felt that is not at risk this roll. Dealers put a small OFF
+   button on top of it; so does this, and the chips go quiet underneath. */
+.stack.is-off .chip {
+  opacity: 0.45;
+}
+
+.off-button circle {
+  fill: #f4ece0;
+  stroke: #2b1810;
+  stroke-width: 1.5;
+}
+
+.off-button text {
+  fill: #2b1810;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* ------------------------------------------------------------------- puck */
+
+.puck circle {
+  fill: #14100c;
+  stroke: #f4ece0;
+  stroke-width: 2.5;
+}
+
+.puck .puck-ring {
+  fill: none;
+  stroke: rgba(244, 236, 224, 0.45);
+  stroke-width: 1.2;
+}
+
+.puck text {
+  fill: #f4ece0;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.puck.is-on circle {
+  fill: #f4ece0;
+  stroke: #2b1810;
+}
+
+.puck.is-on .puck-ring {
+  stroke: rgba(43, 24, 16, 0.4);
+}
+
+.puck.is-on text {
+  fill: #2b1810;
+}
+
+/* ---------------------------------------------------------------- ledger */
+
+/* What the roll did to your money, in the order the crew did it. Sits over the
+   felt for a moment rather than in the rail, because it belongs to the throw. */
+.ledger {
+  position: absolute;
+  left: clamp(16px, 3vw, 40px);
+  top: clamp(16px, 3vw, 40px);
+  margin: 0;
+  padding: 10px 14px;
+  list-style: none;
+  border-radius: 10px;
+  background: rgba(10, 5, 5, 0.82);
+  backdrop-filter: blur(3px);
+  border: 1px solid rgba(244, 236, 224, 0.14);
+  font: 500 13px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+  max-width: 30ch;
+  pointer-events: none;
+}
+
+.ledger .is-win {
+  color: #7ddc9a;
+}
+
+.ledger .is-lose {
+  color: #f08a8a;
+}
+
+.ledger .is-back {
+  color: var(--print-dim);
+}
+
+/* -------------------------------------------------------------- the rail */
+
+/* A fixed height, not one that follows its contents.
+   The bet list grows as you bet, and if the rail grew with it the felt above
+   would shrink and every chip on the table would slide half an inch while you
+   were reaching for the next one. The list scrolls inside a rail that does
+   not move. */
+.rail {
+  height: clamp(196px, 27vh, 280px);
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) minmax(280px, 1.1fr) minmax(260px, 1fr);
+  gap: clamp(12px, 2vw, 28px);
+  padding: clamp(10px, 1.6vw, 18px) clamp(12px, 2vw, 26px);
+  background: linear-gradient(#241408, #150b06);
+  border-top: 2px solid var(--rail-edge);
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  align-items: start;
+}
+
+.rail-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.rail button {
+  font: inherit;
+  font-size: 13px;
+  color: var(--print);
+  background: rgba(244, 236, 224, 0.07);
+  border: 1px solid rgba(244, 236, 224, 0.2);
+  border-radius: 7px;
+  padding: 7px 11px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.rail button:hover:not(:disabled) {
+  background: rgba(244, 236, 224, 0.16);
+  border-color: rgba(244, 236, 224, 0.4);
+}
+
+.rail button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* --- money and chips */
+
+.money {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.money-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--print-dim);
+}
+
+.money-label {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.money-big {
+  font-size: 26px;
+  color: var(--gold);
+  letter-spacing: -0.01em;
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip-button {
+  padding: 2px;
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 0;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.chip-button:hover:not(:disabled) {
+  transform: translateY(-3px);
+}
+
+.chip-button.is-selected {
+  border-color: var(--gold);
+  transform: translateY(-4px);
+}
+
+.chip-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* --- the middle: what the table just said, and what you can say back */
+
+.rail-mid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.say {
+  min-height: 2.6em;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.34);
+  border-left: 3px solid var(--gold);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.say.is-refused {
+  border-left-color: var(--red);
+  color: #ffd4d4;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid rgba(244, 236, 224, 0.2);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.segmented button {
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.segmented button + button {
+  border-left: 1px solid rgba(244, 236, 224, 0.2);
+}
+
+.segmented button.is-on {
+  background: rgba(233, 200, 119, 0.22);
+  color: #fff3d6;
+}
+
+.hint {
+  opacity: 0.55;
+  font-size: 11px;
+}
+
+.roll {
+  padding: 13px !important;
+  font-size: 17px !important;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  background: linear-gradient(#9a1c26, #6d1019) !important;
+  border-color: rgba(244, 236, 224, 0.35) !important;
+  font-weight: 700;
+}
+
+.roll:hover:not(:disabled) {
+  background: linear-gradient(#b52530, #82141f) !important;
+}
+
+/* --- what is on the felt */
+
+.rail-right h2 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--print-dim);
+  font-weight: 600;
+}
+
+.rail-right .empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--print-dim);
+}
+
+.bets {
+  margin: 0;
+  padding: 0 6px 0 0;
+  list-style: none;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.bets li {
+  display: grid;
+  grid-template-columns: 4.5em 1fr auto 2.6em 1.6em;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(244, 236, 224, 0.08);
+}
+
+.bets li.is-off {
+  color: var(--print-dim);
+}
+
+.bet-group {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--print-dim);
+}
+
+.bet-amount {
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+
+.bet-amount em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--print-dim);
+}
+
+.bets button {
+  padding: 2px 5px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+
+.bet-working.is-fixed {
+  text-align: center;
+  color: rgba(244, 236, 224, 0.28);
+}
+
+/* On a narrow screen the three columns stack, felt first. */
+@media (max-width: 900px) {
+  .rail {
+    height: clamp(220px, 38vh, 340px);
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: 'left mid' 'right right';
+    gap: 10px 14px;
+  }
+
+  .rail-left { grid-area: left; }
+  .rail-mid { grid-area: mid; }
+  .rail-right { grid-area: right; min-height: 60px; }
 }
