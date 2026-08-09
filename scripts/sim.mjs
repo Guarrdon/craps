@@ -196,7 +196,7 @@ function sizeFor(id, ctx) {
 
 function edges() {
   const rolls = Math.max(20_000, Math.floor(ROLLS / BET_IDS.filter((id) => EXPECTED[id] !== undefined).length))
-  console.log(`\nHouse edge per bet resolved  -  ${rolls.toLocaleString()} throws each, seed ${SEED}`)
+  console.log(`\nHouse edge per bet made  -  ${rolls.toLocaleString()} throws each, seed ${SEED}`)
   console.log('A bet is flagged when it sits more than three standard errors from what it should be.\n')
   console.log(pad('bet', 20) + lpad('measured', 10) + lpad('expected', 10) + lpad('diff', 9) + lpad('3 s.e.', 9) + lpad('decisions', 11))
   console.log('-'.repeat(79))
