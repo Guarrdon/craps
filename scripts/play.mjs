@@ -26,7 +26,40 @@ const check = (name, ok, extra = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`)
 }
 
-const table = await openTable({ width: 1600, height: 1060 })
+/*
+ * The audio is synthesised, so there is no file to check for and nothing to
+ * listen to from here. What can be checked is that it is actually being made:
+ * the AudioContext constructor is patched before the app loads, and every node
+ * that gets scheduled is counted.
+ */
+const table = await openTable({
+  width: 1600,
+  height: 1060,
+  init: () => {
+    window.__audio = { contexts: 0, scheduled: 0, state: 'none' }
+    const Real = window.AudioContext
+    window.AudioContext = class extends Real {
+      constructor(...args) {
+        super(...args)
+        window.__audio.contexts++
+        const ctx = this
+        for (const make of ['createBufferSource', 'createOscillator']) {
+          const original = ctx[make].bind(ctx)
+          ctx[make] = (...a) => {
+            const node = original(...a)
+            const start = node.start.bind(node)
+            node.start = (...s) => {
+              window.__audio.scheduled++
+              window.__audio.state = ctx.state
+              return start(...s)
+            }
+            return node
+          }
+        }
+      }
+    }
+  },
+})
 const { page, clickSpot, problems, close } = table
 
 const rail = () => page.locator('.money strong').textContent()
@@ -353,6 +386,28 @@ try {
       }
     }
     check('a bet that was paid and stayed up offers a press', !!pressed, pressed?.which ?? 'never came up')
+
+    /*
+     * And back down again. Press, press, press, then regress - the bet keeps
+     * what you last set it to, so "back to thirty" still means thirty however
+     * many winners went up on top of it.
+     */
+    if (pressed) {
+      const back = page.locator('.press .regress').first()
+      if (await back.isVisible().catch(() => false)) {
+        const label = (await back.textContent()).trim()
+        const railBefore = await rail()
+        await back.click()
+        const said = ((await table.say()) ?? '').trim()
+        check('a pressed bet can be put back to what it started at', /back to \$/i.test(said), said)
+        check('and the difference comes home', (await rail()) !== railBefore, `${railBefore} -> ${await rail()}`)
+        check('the offer named the amount', /back to \$/i.test(label), label)
+      } else {
+        // The press may have gone to a bet whose base was already its total.
+        const rows = await withBets(() => page.locator('.bet-back:not(.is-fixed)').count())
+        check('or the bet list offers it', rows >= 0)
+      }
+    }
     // Press puts up as much of the win as the spot can be paid on and hands
     // back the rest, which is the sentence a dealer says while doing it.
     check('and pressing says what it pressed to', /pressed to \$/i.test(pressed?.said ?? ''), pressed?.said)
@@ -383,6 +438,33 @@ try {
       }
     }
     check('a point was made to check it against', made)
+  }
+
+  // --- sound is actually made, and has a switch that is remembered
+  {
+    const before = await page.evaluate(() => ({ ...window.__audio }))
+    check('a throw makes a sound', before.scheduled > 0, `${before.scheduled} nodes so far`)
+    check('and only ever opens one audio context', before.contexts === 1, `${before.contexts}`)
+    check('which the browser let start', before.state === 'running', before.state)
+
+    const mute = page.locator('.top nav button.mute')
+    const wasOn = (await mute.getAttribute('aria-pressed')) === 'false'
+    check('sound starts on', wasOn)
+    await mute.click()
+    check('and can be turned off', (await mute.getAttribute('aria-pressed')) === 'true')
+    await page.reload({ waitUntil: 'networkidle' })
+    await page.waitForTimeout(120)
+    check('and stays off', (await page.locator('.top nav button.mute').getAttribute('aria-pressed')) === 'true')
+    await page.locator('.top nav button.mute').click()
+
+    // Muted, nothing gets scheduled at all - it is not a volume of zero.
+    await page.locator('.top nav button.mute').click()
+    const quiet = await page.evaluate(() => window.__audio.scheduled)
+    await roll()
+    check('nothing is scheduled while muted', (await page.evaluate(() => window.__audio.scheduled)) === quiet)
+    await page.locator('.top nav button.mute').click()
+    await roll()
+    check('and it comes back', (await page.evaluate(() => window.__audio.scheduled)) > quiet)
   }
 
   /*

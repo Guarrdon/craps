@@ -13,6 +13,7 @@ import { throwDice } from './lib/dice.js'
 import { chipAt, chipStyleAt } from './lib/layout.js'
 import { check, toLegal, unitFor } from './lib/limits.js'
 import { houseRng, makeRng } from './lib/rng.js'
+import * as sound from './lib/sound.js'
 import {
   clearGame,
   loadGame,
@@ -25,7 +26,7 @@ import {
   savePrefs,
   saveStats,
 } from './lib/storage.js'
-import { backEverything, newTable, placeMany, pressAmount, reducer } from './lib/table.js'
+import { backEverything, baseOf, newTable, placeMany, pressAmount, reducer } from './lib/table.js'
 import './styles.css'
 
 // Set by scripts/probe.mjs with ?probe on the URL. Dev builds only - the flag
@@ -80,6 +81,10 @@ export default function App() {
     [state],
   )
 
+  useEffect(() => {
+    sound.setMuted(!!prefs.muted)
+  }, [prefs.muted])
+
   // --- remembering
   useEffect(() => {
     if (PROBE_ONLY) return
@@ -126,6 +131,7 @@ export default function App() {
 
   const onSpot = useCallback(
     (id) => {
+      sound.wake()
       setPointed((p) => ({ id, n: (p?.n ?? 0) + 1 }))
       // In probe mode nothing is bet, only recorded. scripts/probe.mjs is
       // checking that the felt's geometry answers to a click, and a felt that
@@ -179,6 +185,25 @@ export default function App() {
     setSay({ kind: 'bet', text: `${betDef(id).label} down.` })
   }, [])
 
+  // Back to what it started at, with the presses handed back.
+  const onRegress = useCallback(
+    (id) => {
+      const bet = state.bets[id]
+      if (!bet) return
+      const base = baseOf(bet)
+      if (bet.amount <= base) {
+        setSay({ kind: 'refused', text: `${betDef(id).label} is already at ${money(base)}.` })
+        return
+      }
+      dispatch({ type: 'regress', id })
+      setSay({
+        kind: 'bet',
+        text: `${betDef(id).label} back to ${money(base)} — ${money(bet.amount - base)} down.`,
+      })
+    },
+    [state.bets],
+  )
+
   const onClearAll = useCallback(() => {
     for (const id of Object.keys(state.bets)) dispatch({ type: 'takedown', id })
     setSay({ kind: 'bet', text: 'Everything that can come down is down.' })
@@ -204,6 +229,7 @@ export default function App() {
     const shape = makeRng(rng.current.int(2 ** 30))
     const thrown = throwDice(shape, [roll.a, roll.b])
 
+    sound.dice()
     setSay({ kind: 'throw', text: 'Dice are out.' })
     setLedger(null)
     setPressable([]) // the window to press closes when the dice leave the hand
@@ -239,6 +265,9 @@ export default function App() {
       dispatch({ type: 'roll', roll: settling.roll })
       setStats((s) => recordRoll(s, settling.roll, settling.events, settling.rail))
       setLedger({ roll: settling.roll, ...ledgerFor(settling.events) })
+      // Paid once the crew has finished working it, which is when the chips
+      // would actually be pushed across.
+      sound.payout(settling.events)
 
       /*
        * The line rides.
@@ -279,7 +308,9 @@ export default function App() {
       for (const { id, pay } of wins) {
         const up = pressAmount(state, id, pay)
         if (up <= 0 || up > state.bankroll) continue
-        dispatch({ type: 'bet', id, amount: up })
+        // press, not bet: the bet keeps whatever it was last deliberately set
+        // to, so "back to thirty" still means something three presses later.
+        dispatch({ type: 'bet', id, amount: up, press: true })
         setStats((s) => recordWager(s, up))
         done.push({ id, up, back: pay - up })
       }
@@ -287,7 +318,10 @@ export default function App() {
         setSay({ kind: 'refused', text: 'Nothing there to press, or not enough left on the rail.' })
         return
       }
-      setPressable((p) => p.filter((x) => !done.some((d) => d.id === x.id)))
+      // Marked as pressed rather than removed: the window to take it back down
+      // is the same window, and a player who presses and then thinks better of
+      // it should not have to go looking in the list.
+      setPressable((p) => p.map((x) => (done.some((d) => d.id === x.id) ? { ...x, pressed: true } : x)))
       const one = done.length === 1 ? done[0] : null
       setSay({
         kind: 'bet',
@@ -415,6 +449,16 @@ export default function App() {
           <button type="button" onClick={() => setOpen('rules')}>Every bet</button>
           <button type="button" onClick={() => setOpen('stats')}>Session</button>
           <button type="button" onClick={() => setOpen('table')}>Table</button>
+          <button
+            type="button"
+            className="mute"
+            onClick={() => { sound.wake(); setPref({ muted: !prefs.muted }) }}
+            aria-pressed={!!prefs.muted}
+            aria-label={prefs.muted ? 'Turn sound on' : 'Turn sound off'}
+            title={prefs.muted ? 'Sound off' : 'Sound on'}
+          >
+            {prefs.muted ? '\u{1F507}' : '\u{1F509}'}
+          </button>
           <button type="button" onClick={() => setOpen('help')} aria-label="How this works">?</button>
         </nav>
       </header>
@@ -495,6 +539,7 @@ export default function App() {
         say={say}
         pressable={pressable}
         onPress={onPress}
+        onRegress={onRegress}
         opening={prefs.opening}
         onOpening={onOpening}
         onSaveOpening={onSaveOpening}

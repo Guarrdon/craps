@@ -1,5 +1,5 @@
 import { check, done, eq, near } from './harness.js'
-import { newTable, placeBet, railTotal, reducer, setWorking, takeDown } from '../src/lib/table.js'
+import { baseOf, newTable, placeBet, pressAmount, railTotal, reducer, regress, setWorking, takeDown } from '../src/lib/table.js'
 import { atRisk } from '../src/lib/rules.js'
 import { makeRng, roll } from '../src/lib/rng.js'
 import { BET_IDS, betDef } from '../src/lib/bets.js'
@@ -103,6 +103,48 @@ const start = (over = {}) => {
   s = placeBet(s, 'buy-4', 100)
   s = takeDown(s, 'buy-4')
   eq('taking a buy down does not refund the commission', s.bankroll, 4995)
+}
+
+/*
+ * ------------------------------------------------------- press, then regress
+ *
+ * A bet remembers what it was last deliberately set to. Pressing puts the
+ * table's winnings up on top of that and leaves it alone, which is what lets
+ * "back to thirty" still mean thirty three presses later.
+ */
+{
+  let s = start({ phase: 'point', point: 5 })
+  s = placeBet(s, 'place-6', 30)
+  eq('a bet starts where you put it', baseOf(s.bets['place-6']), 30)
+
+  // The six pays $35; press it and $30 of that goes up, $5 comes back.
+  s = placeBet(s, 'place-6', pressAmount(s, 'place-6', 35), { keepBase: true })
+  eq('pressing raises the bet', s.bets['place-6'].amount, 60)
+  eq('but not what it started at', baseOf(s.bets['place-6']), 30)
+
+  s = placeBet(s, 'place-6', pressAmount(s, 'place-6', 70), { keepBase: true })
+  eq('and again', s.bets['place-6'].amount, 126)
+  eq('still remembering thirty', baseOf(s.bets['place-6']), 30)
+
+  const rail = s.bankroll
+  s = regress(s, 'place-6')
+  eq('regressing puts it back to what it started at', s.bets['place-6'].amount, 30)
+  eq('and hands back the difference', s.bankroll, rail + 96)
+  check('the bet never left the felt', !!s.bets['place-6'])
+
+  const again = regress(s, 'place-6')
+  check('regressing a bet already at its base is refused', !!again.refused)
+  eq('and changes nothing', again.bankroll, s.bankroll)
+}
+
+{
+  // Betting on it deliberately is not pressing: that sets a new base, because
+  // it is a decision about how much you want out there.
+  let s = start({ phase: 'point', point: 5 })
+  s = placeBet(s, 'place-6', 30)
+  s = placeBet(s, 'place-6', 30)
+  eq('adding to a bet yourself moves what it started at', baseOf(s.bets['place-6']), 60)
+  check('so there is nothing to regress', !!regress(s, 'place-6').refused)
 }
 
 // ------------------------------------------------------------ working state

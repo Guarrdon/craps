@@ -167,6 +167,8 @@ export const defaultPrefs = () => ({
   // put them out without being asked.
   opening: null,
   autoOpen: false,
+  // Sound is on. It is three short synthesised cues, not a soundtrack.
+  muted: false,
 })
 
 export const loadPrefs = () => ({ ...defaultPrefs(), ...read(PREFS, {}) })

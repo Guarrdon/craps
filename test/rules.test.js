@@ -1,5 +1,6 @@
 import { check, done, eq } from './harness.js'
 import { newTable, resolveRoll } from '../src/lib/rules.js'
+import { check as check2 } from '../src/lib/limits.js'
 import { roll } from '../src/lib/rng.js'
 
 // A table with the bets already up, so a scenario reads as a position rather
@@ -188,6 +189,51 @@ const ids = (events, kind) => events.filter((e) => e.kind === kind).map((e) => e
   eq('a seven takes the bonus', after.state.bankroll, 0)
   eq('and wipes the tracker', after.state.marked.size, 0)
   check('even a come-out seven', after.events.some((e) => e.kind === 'unmark'))
+}
+
+/*
+ * The bonus row, twice in a session.
+ *
+ * When Little fills it pays and comes down, but the markers stay lit - Big and
+ * Boom or Bust are still running on the same numbers and need them. Which also
+ * means Little cannot go up again in the same hand: every number it wants is
+ * already marked, so the bet would be a certainty rather than a bet.
+ *
+ * A seven wipes the board. After that it is a fresh shooter and a fresh set,
+ * and the same player can win it again - rare, but people do.
+ */
+{
+  const low = [[1, 1], [1, 2], [2, 2], [2, 3], [3, 3]] // 2, 3, 4, 5, 6
+  let state = at({ phase: 'come-out', bets: bet({ little: 5, all: 5 }) })
+  for (const [a, b] of low) state = resolveRoll(state, roll(a, b)).state
+
+  eq('Little pays when its five are in', state.bankroll, 155)
+  check('and comes off the felt', !state.bets.little)
+  check('but the markers stay lit for the others', state.marked.size === 5)
+  check('so Boom or Bust is still running on them', !!state.bets.all)
+  check(
+    'and Little cannot go up again on a board it has already filled',
+    !check2('little', 5, { phase: state.phase, point: state.point, marked: state.marked, bets: state.bets }).ok,
+  )
+
+  // Seven out. The board is wiped and the next shooter starts clean.
+  const after = resolveRoll(state, roll(3, 4))
+  eq('a seven takes Boom or Bust with it', after.state.bankroll, 155)
+  eq('and clears every marker', after.state.marked.size, 0)
+  check(
+    'so Little can be bet on the next shooter',
+    check2('little', 5, {
+      phase: after.state.phase,
+      point: after.state.point,
+      marked: after.state.marked,
+      bets: after.state.bets,
+    }).ok,
+  )
+
+  // And won again, which is the whole question.
+  let again = { ...after.state, bets: bet({ little: 5 }), bankroll: 0 }
+  for (const [a, b] of low) again = resolveRoll(again, roll(a, b)).state
+  eq('and won again', again.bankroll, 155)
 }
 
 {

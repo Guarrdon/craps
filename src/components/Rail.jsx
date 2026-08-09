@@ -19,6 +19,7 @@ import { betDef, isWorking } from '../lib/bets.js'
 import { CHIPS, money } from '../lib/bank.js'
 import { ChipButton } from './Chips.jsx'
 import { atRisk } from '../lib/rules.js'
+import { baseOf } from '../lib/table.js'
 
 const GROUP_ORDER = ['line', 'odds', 'box', 'field', 'centre', 'hardway', 'hop', 'bonus']
 const GROUP_NAME = {
@@ -40,6 +41,7 @@ export default function Rail({
   rolling,
   pressable = [],
   onPress,
+  onRegress,
   opening,
   onOpening,
   onSaveOpening,
@@ -66,16 +68,27 @@ export default function Rail({
       {pressable.length > 0 && !rolling && (
         <div className="press">
           <span className="press-title">Paid and still up</span>
-          {pressable.map(({ id, pay }) => (
-            <button key={id} type="button" onClick={() => onPress(id)}>
-              Press {betDef(id).label} <em>+{money(pay)}</em>
-            </button>
-          ))}
-          {pressable.length > 1 && (
+          {pressable
+            .filter((p) => !p.pressed)
+            .map(({ id, pay }) => (
+              <button key={id} type="button" onClick={() => onPress(id)}>
+                Press {betDef(id).label} <em>+{money(pay)}</em>
+              </button>
+            ))}
+          {pressable.filter((p) => !p.pressed).length > 1 && (
             <button type="button" className="press-all" onClick={() => onPress()}>
               Press them all
             </button>
           )}
+          {/* Press, press, press, then regress. Only offered on a bet that is
+              actually out above what you set it to. */}
+          {pressable
+            .filter(({ id }) => state.bets[id] && state.bets[id].amount > baseOf(state.bets[id]))
+            .map(({ id }) => (
+              <button key={`back-${id}`} type="button" className="regress" onClick={() => onRegress(id)}>
+                {betDef(id).label} back to {money(baseOf(state.bets[id]))}
+              </button>
+            ))}
         </div>
       )}
 
@@ -99,7 +112,25 @@ export default function Rail({
                     <span className="bet-amount">
                       {money(bet.amount)}
                       {bet.vig ? <em title="commission paid"> +{money(bet.vig)}</em> : null}
+                      {/* What it was before anything was pressed on top. */}
+                      {bet.amount > baseOf(bet) ? (
+                        <em className="was" title={`Started at ${money(baseOf(bet))}`}>
+                          {' '}from {money(baseOf(bet))}
+                        </em>
+                      ) : null}
                     </span>
+                    {bet.amount > baseOf(bet) ? (
+                      <button
+                        type="button"
+                        className="bet-back"
+                        onClick={() => onRegress(id)}
+                        title={`Back to ${money(baseOf(bet))}`}
+                      >
+                        &#8630;
+                      </button>
+                    ) : (
+                      <span className="bet-back is-fixed">&mdash;</span>
+                    )}
                     {d.togglable ? (
                       <button type="button" className="bet-working" onClick={() => onWorking(!on, id)}>
                         {on ? 'ON' : 'OFF'}

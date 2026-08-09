@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process'
 import { chromium } from 'playwright'
 import { FELT, probeAt } from '../src/lib/layout.js'
 
-export async function openTable({ width = 1500, height = 1000, headless = true, query = '' } = {}) {
+export async function openTable({ width = 1500, height = 1000, headless = true, query = '', init } = {}) {
   /*
    * Let vite pick the port and read back which one it took.
    *
@@ -46,6 +46,11 @@ export async function openTable({ width = 1500, height = 1000, headless = true, 
     if (['error', 'warning'].includes(m.type()) && !expected(m.text())) problems.push(m.text())
   })
   page.on('pageerror', (e) => problems.push(`uncaught: ${e.message}`))
+
+  // Anything that has to be in place before the app's first line runs - the
+  // audio harness patches the AudioContext constructor, which has to happen
+  // before anything constructs one.
+  if (init) await page.addInitScript(init)
 
   await page.goto(`http://localhost:${port}/${query}`, { waitUntil: 'networkidle' })
   await page.evaluate(() => document.fonts.ready)

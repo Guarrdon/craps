@@ -12,7 +12,7 @@
  */
 
 import { POINTS, betDef, isWorking, quote } from './bets.js'
-import { check, maxBet, unitFor, vigFor } from './limits.js'
+import { check, maxBet, money, unitFor, vigFor } from './limits.js'
 import { newTable, resolveRoll } from './rules.js'
 
 export { newTable }
@@ -20,7 +20,7 @@ export { newTable }
 export function reducer(state, action) {
   switch (action.type) {
     case 'bet':
-      return placeBet(state, action.id, action.amount)
+      return placeBet(state, action.id, action.amount, { keepBase: action.press })
     case 'takedown':
       return takeDown(state, action.id)
     case 'working':
@@ -29,6 +29,8 @@ export function reducer(state, action) {
       return backEverything(state).state
     case 'many':
       return placeMany(state, action.list).state
+    case 'regress':
+      return regress(state, action.id)
     case 'configure':
       // Changing the table's rules mid-hand is not something a house does, but
       // this is one player's table and the bets already down keep the terms
@@ -59,16 +61,27 @@ const clearRefusal = (state) => (state.refused ? { ...state, refused: null } : s
 
 // ------------------------------------------------------------------- betting
 
-export function placeBet(state, id, amount) {
+/*
+ * `keepBase` is what separates pressing from betting.
+ *
+ * Every bet remembers what it was last deliberately set to. Clicking a spot
+ * sets that; pressing a winner does not, because the winnings going up are the
+ * table's money doing the work rather than a decision about how much you want
+ * out there. It is what lets "back to thirty" mean something three presses
+ * later.
+ */
+export function placeBet(state, id, amount, { keepBase = false } = {}) {
   const verdict = check(id, amount, ctxFor(state))
   if (!verdict.ok) return refuse(state, verdict.reason)
 
   const standing = state.bets[id]
+  const total = (standing?.amount ?? 0) + amount
   const bets = {
     ...state.bets,
     [id]: {
       ...standing,
-      amount: (standing?.amount ?? 0) + amount,
+      amount: total,
+      base: keepBase ? (standing?.base ?? standing?.amount ?? amount) : total,
       // The commission is charged when the bet goes up, which is how most
       // houses do it - the alternative, charging on a win, is a better deal
       // for the player and rarer than the internet suggests.
@@ -194,6 +207,32 @@ export function placeMany(state, list) {
 export function pressAmount(state, id, win) {
   const unit = unitFor(id, { point: state.point })
   return Math.floor(win / unit) * unit
+}
+
+// What a bet started at, before anything was pressed on top of it.
+export const baseOf = (bet) => bet?.base ?? bet?.amount ?? 0
+
+/*
+ * Back down to what it started at.
+ *
+ * Press, press, press, then regress. Three winners on the six and it is out
+ * there at a hundred and eight; one word to the dealer and it is thirty again
+ * with the rest in your rack. The bet never comes off the felt - it is reduced,
+ * which is why it keeps its place and its working state.
+ */
+export function regress(state, id) {
+  const bet = state.bets[id]
+  if (!bet) return state
+  const base = baseOf(bet)
+  if (bet.amount <= base) {
+    return refuse(state, `${betDef(id).label} is already at ${money(base)}.`)
+  }
+  return {
+    ...state,
+    bets: { ...state.bets, [id]: { ...bet, amount: base } },
+    bankroll: state.bankroll + (bet.amount - base),
+    refused: null,
+  }
 }
 
 // Turn a bet on or off for the come-out. Only the ones a dealer would put a
