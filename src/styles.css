@@ -45,8 +45,14 @@ body {
 .game {
   height: 100%;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  /* Both axes bounded. The implicit column a grid gives you is sized by its
+     content, so the rail - which is a flex row that would rather not wrap -
+     was widening the whole page and taking the table off the side of a phone
+     with it. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* ----------------------------------------------------------------- header */
@@ -117,6 +123,12 @@ body {
   min-height: 0;
   container-type: size;
   display: grid;
+  /* Explicitly bounded tracks, not the implicit auto ones `place-items` would
+     give. An auto track is sized by its content, so the frame's `100%` was
+     resolving against a column the frame itself had widened - and on a narrow
+     screen the table simply ran off the right edge. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   place-items: center;
   padding: clamp(8px, 2vw, 28px);
   /* The rail: a padded wooden edge the felt sits inside. */
@@ -332,7 +344,7 @@ body {
 }
 
 .tracker text {
-  font-size: 22px;
+  font-size: 15px;
   font-weight: 700;
   fill: var(--print-dim);
   stroke: none;
@@ -728,39 +740,44 @@ body {
 
 /* -------------------------------------------------------------- the rail */
 
-/* A fixed height, not one that follows its contents.
-   The bet list grows as you bet, and if the rail grew with it the felt above
-   would shrink and every chip on the table would slide half an inch while you
-   were reaching for the next one. The list scrolls inside a rail that does
-   not move. */
+/*
+ * One row, and as short as it can be.
+ *
+ * It used to be three tall columns taking a quarter of the screen away from
+ * the table, mostly to repeat things the felt was already showing - the call
+ * is on the cloth and so are the chips. What is left is what has nowhere else
+ * to live. Nothing here is smaller than 44px, because it has to work under a
+ * thumb.
+ */
 .rail {
-  height: clamp(196px, 27vh, 280px);
-  display: grid;
-  grid-template-columns: minmax(230px, 1fr) minmax(280px, 1.1fr) minmax(260px, 1fr);
-  gap: clamp(12px, 2vw, 28px);
-  padding: clamp(10px, 1.6vw, 18px) clamp(12px, 2vw, 26px);
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1.2vw, 18px);
+  padding: 8px clamp(10px, 1.6vw, 22px);
   background: linear-gradient(#241408, #150b06);
   border-top: 2px solid var(--rail-edge);
   font-family: 'Helvetica Neue', Arial, sans-serif;
-  align-items: start;
+  flex-wrap: wrap;
 }
 
-.rail-right {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
+.rail.is-teaching {
+  /* Nothing on the felt takes a bet while it is being explained, so the rail
+     says so rather than looking live. */
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .rail button {
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
+  min-height: 44px;
   color: var(--print);
   background: rgba(244, 236, 224, 0.07);
   border: 1px solid rgba(244, 236, 224, 0.2);
   border-radius: 7px;
-  padding: 7px 11px;
+  padding: 0 11px;
   cursor: pointer;
+  white-space: nowrap;
   transition: background 120ms ease, border-color 120ms ease;
 }
 
@@ -769,97 +786,52 @@ body {
   border-color: rgba(244, 236, 224, 0.4);
 }
 
-.rail button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-/* --- money and chips */
+.rail button:disabled { opacity: 0.32; cursor: not-allowed; }
+.rail button.is-on { background: rgba(233, 200, 119, 0.22); color: #fff3d6; }
 
 .money {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-bottom: 12px;
+  line-height: 1.15;
+  min-width: 5.5em;
 }
 
-.money-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 13px;
-  color: var(--print-dim);
-}
-
-.money-label {
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-size: 11px;
-}
-
-.money-big {
-  font-size: 26px;
+.money strong {
+  font-size: 21px;
   color: var(--gold);
-  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
-.chips {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+.money span {
+  font-size: 11px;
+  color: var(--print-dim);
+  font-variant-numeric: tabular-nums;
 }
+
+.chips { display: flex; gap: 4px; min-width: 0; }
 
 .chip-button {
-  padding: 2px;
+  padding: 0;
   background: none;
   border: 2px solid transparent;
   border-radius: 50%;
   cursor: pointer;
   line-height: 0;
+  min-height: 0;
   transition: transform 120ms ease, border-color 120ms ease;
 }
 
-.chip-button:hover:not(:disabled) {
-  transform: translateY(-3px);
-}
+.chip-button:hover:not(:disabled) { transform: translateY(-2px); }
+.chip-button.is-selected { border-color: var(--gold); transform: translateY(-3px); }
+.chip-button:disabled { opacity: 0.3; cursor: not-allowed; }
 
-.chip-button.is-selected {
-  border-color: var(--gold);
-  transform: translateY(-4px);
-}
-
-.chip-button:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-/* --- the middle: what the table just said, and what you can say back */
-
-.rail-mid {
+.doings {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.say {
-  min-height: 2.6em;
-  padding: 9px 12px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.34);
-  border-left: 3px solid var(--gold);
-  font-size: 15px;
-  line-height: 1.35;
-}
-
-.say.is-refused {
-  border-left-color: var(--red);
-  color: #ffd4d4;
-}
-
-.actions {
-  display: flex;
+  align-items: center;
+  gap: 5px;
   flex-wrap: wrap;
-  gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 .segmented {
@@ -869,44 +841,111 @@ body {
   overflow: hidden;
 }
 
-.segmented button {
-  border: none;
-  border-radius: 0;
-  background: none;
+.segmented button { border: none; border-radius: 0; background: none; }
+.segmented button + button { border-left: 1px solid rgba(244, 236, 224, 0.2); }
+
+.tick {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: var(--print-dim);
+  cursor: pointer;
 }
 
-.segmented button + button {
-  border-left: 1px solid rgba(244, 236, 224, 0.2);
-}
-
-.segmented button.is-on {
-  background: rgba(233, 200, 119, 0.22);
-  color: #fff3d6;
-}
-
-.hint {
-  opacity: 0.55;
-  font-size: 11px;
-}
+.tick input { accent-color: var(--gold); cursor: pointer; width: 16px; height: 16px; }
 
 .roll {
-  padding: 13px !important;
-  font-size: 17px !important;
-  letter-spacing: 0.16em;
+  margin-left: auto;
+  min-width: 116px;
+  font-size: 15px !important;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+  font-weight: 700;
   background: linear-gradient(#9a1c26, #6d1019) !important;
   border-color: rgba(244, 236, 224, 0.35) !important;
-  font-weight: 700;
 }
 
-.roll:hover:not(:disabled) {
-  background: linear-gradient(#b52530, #82141f) !important;
+.roll:hover:not(:disabled) { background: linear-gradient(#b52530, #82141f) !important; }
+
+/* The press window, floated above the rail so its appearing does not change
+   the rail's height and shove the table about. Positioned against the rail
+   itself - as a sibling it would resolve against the viewport and land above
+   the top of the screen. */
+.press {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 8px 12px;
+  margin: 0;
+  border-radius: 10px;
+  background: rgba(14, 30, 19, 0.95);
+  border: 1px solid rgba(125, 220, 154, 0.42);
+  animation: call-in 240ms ease backwards;
 }
 
-/* --- what is on the felt */
+.rail { position: relative; }
 
-.rail-right h2 {
-  margin: 0 0 6px;
+.press-title {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9fe3b4;
+}
+
+.press button {
+  min-height: 40px;
+  font-size: 12.5px;
+  color: var(--print);
+  background: rgba(244, 236, 224, 0.08);
+  border: 1px solid rgba(125, 220, 154, 0.3);
+  border-radius: 7px;
+  padding: 0 11px;
+  cursor: pointer;
+}
+
+.press button:hover { background: rgba(125, 220, 154, 0.2); }
+.press button em { font-style: normal; color: #7ddc9a; }
+.press .press-all { border-color: rgba(125, 220, 154, 0.6); }
+
+/* --- what is on the felt, on demand
+   Five bets on this layout have no printed spot of their own, so they can only
+   be reached from a list - but they do not need to be on screen at all times,
+   so this opens over the table instead of sitting under it. */
+.bets-panel {
+  position: absolute;
+  right: clamp(10px, 1.6vw, 22px);
+  bottom: calc(100% + 8px);
+  z-index: 9;
+  width: min(340px, calc(100vw - 20px));
+  max-height: 46vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(#241408, #170c06);
+  border: 1px solid rgba(244, 236, 224, 0.22);
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.65);
+  animation: rise-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.bets-panel header {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid rgba(244, 236, 224, 0.12);
+}
+
+.bets-panel h2 {
+  margin: 0;
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -914,34 +953,37 @@ body {
   font-weight: 600;
 }
 
-.rail-right .empty {
-  margin: 0;
-  font-size: 13px;
+.bets-panel header button {
+  margin-left: auto;
+  font-size: 20px;
+  line-height: 1;
+  background: none;
+  border: none;
   color: var(--print-dim);
+  cursor: pointer;
+  min-height: 32px;
 }
+
+.bets-panel .empty { margin: 14px; font-size: 13px; color: var(--print-dim); }
 
 .bets {
   margin: 0;
-  padding: 0 6px 0 0;
+  padding: 4px 10px 10px;
   list-style: none;
-  flex: 1;
-  min-height: 0;
   overflow-y: auto;
   font-size: 13px;
 }
 
 .bets li {
   display: grid;
-  grid-template-columns: 4.5em 1fr auto 2.6em 1.6em;
+  grid-template-columns: 3.6em 1fr auto 2.8em 2em;
   gap: 8px;
   align-items: center;
-  padding: 3px 0;
+  padding: 4px 0;
   border-bottom: 1px solid rgba(244, 236, 224, 0.08);
 }
 
-.bets li.is-off {
-  color: var(--print-dim);
-}
+.bets li.is-off { color: var(--print-dim); }
 
 .bet-group {
   font-size: 10px;
@@ -950,40 +992,71 @@ body {
   color: var(--print-dim);
 }
 
-.bet-amount {
-  font-variant-numeric: tabular-nums;
-  color: var(--gold);
-}
-
-.bet-amount em {
-  font-style: normal;
-  font-size: 11px;
-  color: var(--print-dim);
-}
+.bet-amount { font-variant-numeric: tabular-nums; color: var(--gold); }
+.bet-amount em { font-style: normal; font-size: 11px; color: var(--print-dim); }
 
 .bets button {
-  padding: 2px 5px;
+  min-height: 32px;
+  padding: 0 5px;
   font-size: 10.5px;
   letter-spacing: 0.04em;
+  color: var(--print);
+  background: rgba(244, 236, 224, 0.07);
+  border: 1px solid rgba(244, 236, 224, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
 }
 
-.bet-working.is-fixed {
-  text-align: center;
-  color: rgba(244, 236, 224, 0.28);
-}
+.bets button:disabled { opacity: 0.3; cursor: not-allowed; }
+.bet-working.is-fixed { text-align: center; color: rgba(244, 236, 224, 0.28); }
 
-/* On a narrow screen the three columns stack, felt first. */
-@media (max-width: 900px) {
-  .rail {
-    height: clamp(220px, 38vh, 340px);
-    grid-template-columns: 1fr 1fr;
-    grid-template-areas: 'left mid' 'right right';
-    gap: 10px 14px;
+/* On a phone the row wraps and the roll button goes full width under it, which
+   puts the biggest target where the thumb already is. */
+/* On a phone the rail folds into three tight rows - money and chips, the
+   doings as a strip you can swipe, then the throw where the thumb already is.
+   Nothing shrinks below 44px; what gives instead is how much is on screen at
+   once. */
+@media (max-width: 720px) {
+  .rail { gap: 6px; padding: 6px 8px; }
+  .money { min-width: auto; flex-direction: row; align-items: baseline; gap: 6px; }
+  .money strong { font-size: 17px; }
+  .chips { flex: 1; justify-content: flex-end; overflow-x: auto; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+
+  .doings {
+    order: 3;
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
   }
 
-  .rail-left { grid-area: left; }
-  .rail-mid { grid-area: mid; }
-  .rail-right { grid-area: right; min-height: 60px; }
+  .doings::-webkit-scrollbar { display: none; }
+  .roll { order: 4; width: 100%; margin-left: 0; min-height: 48px; }
+  .bets-panel { left: 8px; right: 8px; width: auto; max-height: 40vh; }
+  .press { left: 8px; right: 8px; transform: none; }
+}
+
+/* A phone on its side. One row again, because the height is what is scarce
+   there and the width is not - the doings become a strip you swipe. */
+@media (max-height: 520px) {
+  .rail { gap: 6px; padding: 5px 8px; flex-wrap: nowrap; }
+  .money { flex-direction: column; }
+  .doings { order: 0; width: auto; flex-wrap: nowrap; overflow-x: auto; }
+  .roll { order: 0; width: auto; min-width: 92px; min-height: 44px; margin-left: auto; }
+  .chips { flex: 0 0 auto; }
+  .top { padding: 4px 10px; }
+  .top h1 { font-size: 13px; }
+}
+
+/* A phone in portrait gives a 1.74:1 table very little to work with. The
+   header gives up everything it can. */
+@media (max-width: 620px) {
+  .top { gap: 10px; padding: 6px 10px; }
+  .top-dim { display: none; }
+  .top nav button.teach { font-size: 0; }
+  .top nav button.teach::after { content: 'Explain'; font-size: 11.5px; }
 }
 
 /* --------------------------------------------------------------- dialogs */
@@ -1245,53 +1318,175 @@ kbd {
 
 .dialog-body .dim { color: var(--print-dim); }
 
-/* --- the opening, and pressing */
 
-.opening {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+/* --------------------------------------------------------- training mode */
+
+/*
+ * A bet explained where it lives.
+ *
+ * Beside the spot it is about rather than in the middle of the screen, because
+ * the point is to connect a piece of printed cloth to what it means, and a
+ * modal in the centre breaks that connection every time.
+ */
+.lesson-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
 }
 
-.opening .small { padding: 5px 8px; font-size: 11.5px; }
+.lesson {
+  position: absolute;
+  width: min(340px, 74cqw);
+  max-height: 84cqh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform: translate(14px, -50%);
+  padding: 12px 15px 15px;
+  border-radius: 12px;
+  background: #16100c;
+  border: 1px solid rgba(233, 200, 119, 0.45);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.75);
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+  /* Its own fade rather than the shared rise-in, because that one animates
+     `transform` - and an animated transform replaces the one below, which is
+     what positions the popover beside its spot. It simply never flipped. */
+  animation: lesson-in 180ms ease;
+}
 
-.tick {
+@keyframes lesson-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Flipped to whichever side of the spot has room, so it never hangs off the
+   table however near an edge you point. */
+.lesson.flip-x { transform: translate(calc(-100% - 14px), -50%); }
+.lesson.flip-y { transform: translate(14px, calc(-100% + 40px)); }
+.lesson.flip-x.flip-y { transform: translate(calc(-100% - 14px), calc(-100% + 40px)); }
+
+.lesson header {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.lesson h3 {
+  margin: 0;
+  font-family: 'Optima', Palatino, Georgia, serif;
+  font-size: 19px;
+  letter-spacing: 0.03em;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.lesson header button {
+  margin-left: auto;
+  font-size: 20px;
+  line-height: 1;
+  background: none;
+  border: none;
   color: var(--print-dim);
   cursor: pointer;
+  padding: 0 2px;
 }
 
-.tick input { accent-color: var(--gold); cursor: pointer; }
-
-/* Open until the dice leave the hand, which is the real window. */
-.press {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(125, 220, 154, 0.09);
-  border: 1px solid rgba(125, 220, 154, 0.32);
-  animation: call-in 240ms ease backwards;
-}
-
-.press-title {
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
+.lesson h4 {
+  margin: 12px 0 3px;
+  font-size: 10px;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: #9fe3b4;
+  color: var(--print-dim);
+  font-weight: 600;
 }
 
-.press button em {
-  font-style: normal;
+.lesson p { margin: 0; }
+.lesson-what { color: var(--print); }
+
+.lesson-figures {
+  margin: 10px 0 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+}
+
+.lesson-figures div {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(244, 236, 224, 0.1);
+}
+
+.lesson-figures dt {
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--print-dim);
+}
+
+.lesson-figures dd {
+  margin: 0;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lesson-figures .is-cost { color: #f0a0a0; }
+.lesson-figures .is-free { color: #7ddc9a; }
+
+.lesson-gap {
+  margin-top: 8px !important;
+  font-size: 12px;
   color: #7ddc9a;
 }
 
-.press .press-all {
-  border-color: rgba(125, 220, 154, 0.5);
+.lesson-play {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12.5px;
+  color: var(--print-dim);
+}
+
+.lesson-play li { margin: 2px 0; }
+.lesson-say { font-size: 12.5px; }
+.lesson-called { font-size: 12.5px; color: #f0d9a4; font-style: italic; }
+
+/* The felt makes it obvious that a click will explain rather than bet. */
+.is-teaching-felt .spot:hover { fill: rgba(233, 200, 119, 0.22); }
+.is-teaching-felt .spot { cursor: help; }
+
+.call.is-teach { border-color: rgba(233, 200, 119, 0.5); color: #fff3d6; }
+.top nav button.teach.is-on { background: rgba(233, 200, 119, 0.28); color: #fff3d6; }
+
+
+/*
+ * Turn it sideways.
+ *
+ * A craps table is nearly twice as wide as it is tall, and no amount of
+ * layout makes that fit a phone held upright - the felt ends up two inches
+ * across and the box numbers are unreadable. Rather than pretend otherwise,
+ * say so once, quietly, above the table.
+ */
+.turn-it {
+  display: none;
+}
+
+@media (max-width: 620px) and (orientation: portrait) {
+  .turn-it {
+    display: block;
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(10, 5, 4, 0.85);
+    border: 1px solid rgba(233, 200, 119, 0.35);
+    color: var(--print-dim);
+    font: 500 12px/1.3 'Helvetica Neue', Arial, sans-serif;
+    white-space: nowrap;
+    pointer-events: none;
+  }
 }

@@ -1,14 +1,18 @@
 /*
  * The rail.
  *
- * Your chips, what is on the felt, and the handful of things you would say to
- * a dealer rather than reach out and do: odds on everything, take my place
- * bets down, keep them working through the come-out.
+ * One row: your money, your chips, the handful of things you would say to a
+ * dealer rather than reach out and do, and the dice. It used to be three tall
+ * columns and it was taking a quarter of the screen away from the table for
+ * information the felt was already showing - the call is on the cloth, and so
+ * are the chips.
  *
- * The bet list is not decoration. Five of the bets on this layout have no
- * printed spot of their own - odds sit behind the flat bet, a come bet lives
- * in the number box it found, a buy is a place bet with a button on it - and
- * the list is the only place they can be seen and taken down.
+ * What is left is what has nowhere else to live. The standing-bet list is one
+ * of those: five bets on this layout have no printed spot of their own, so
+ * they can only be reached from a list - but they do not need to be on screen
+ * at all times, so it opens over the table instead of sitting under it.
+ *
+ * Every target here is at least 44px, because this has to work under a thumb.
  */
 
 import { betDef, isWorking } from '../lib/bets.js'
@@ -18,14 +22,8 @@ import { atRisk } from '../lib/rules.js'
 
 const GROUP_ORDER = ['line', 'odds', 'box', 'field', 'centre', 'hardway', 'hop', 'bonus']
 const GROUP_NAME = {
-  line: 'Line',
-  odds: 'Odds',
-  box: 'Box',
-  field: 'Field',
-  centre: 'Centre',
-  hardway: 'Hardways',
-  hop: 'Hops',
-  bonus: 'Bonus',
+  line: 'Line', odds: 'Odds', box: 'Box', field: 'Field',
+  centre: 'Centre', hardway: 'Hard', hop: 'Hop', bonus: 'Bonus',
 }
 
 export default function Rail({
@@ -40,7 +38,6 @@ export default function Rail({
   onTakeDown,
   onRoll,
   rolling,
-  say,
   pressable = [],
   onPress,
   opening,
@@ -48,30 +45,88 @@ export default function Rail({
   onSaveOpening,
   autoOpen,
   onAutoOpen,
+  showBets,
+  onShowBets,
+  teaching,
 }) {
   const standing = Object.entries(state.bets)
-  const onFelt = atRisk(state)
-  const comeOut = state.phase === 'come-out'
-
-  // Whether there is anything to back. The button is pointless on a come-out,
-  // when there is no point for odds to be behind.
   const canOdds = standing.some(([id]) => {
     const d = betDef(id)
     return d.group === 'line' && (d.number || state.point)
   })
+  const working = allWorking(state)
 
   return (
-    <div className="rail">
-      <div className="rail-left">
-        <div className="money">
-          <div className="money-row">
-            <span className="money-label">Rail</span>
-            <strong className="money-big">{money(state.bankroll)}</strong>
-          </div>
-          <div className="money-row">
-            <span className="money-label">On the felt</span>
-            <span>{money(onFelt)}</span>
-          </div>
+    // Both overlays live inside the rail rather than beside it, because they
+    // are positioned against it - a sibling would resolve `absolute` against
+    // the viewport and end up above the top of the screen.
+    <div className={`rail${teaching ? ' is-teaching' : ''}`}>
+      {/* The press window, floated above the rail so it does not change its
+          height when it appears. Open until the dice leave the hand. */}
+      {pressable.length > 0 && !rolling && (
+        <div className="press">
+          <span className="press-title">Paid and still up</span>
+          {pressable.map(({ id, pay }) => (
+            <button key={id} type="button" onClick={() => onPress(id)}>
+              Press {betDef(id).label} <em>+{money(pay)}</em>
+            </button>
+          ))}
+          {pressable.length > 1 && (
+            <button type="button" className="press-all" onClick={() => onPress()}>
+              Press them all
+            </button>
+          )}
+        </div>
+      )}
+
+      {showBets && (
+        <div className="bets-panel" role="dialog" aria-label="What is on the felt">
+          <header>
+            <h2>On the felt</h2>
+            <button type="button" onClick={() => onShowBets(false)} aria-label="Close">&times;</button>
+          </header>
+          {standing.length === 0 ? (
+            <p className="empty">Nothing out. Pick a chip and put it somewhere.</p>
+          ) : (
+            <ul className="bets">
+              {sortBets(standing).map(([id, bet]) => {
+                const d = betDef(id)
+                const on = isWorking(id, bet, state.phase)
+                return (
+                  <li key={id} className={on ? '' : 'is-off'}>
+                    <span className="bet-group">{GROUP_NAME[d.group]}</span>
+                    <span className="bet-name">{d.label}</span>
+                    <span className="bet-amount">
+                      {money(bet.amount)}
+                      {bet.vig ? <em title="commission paid"> +{money(bet.vig)}</em> : null}
+                    </span>
+                    {d.togglable ? (
+                      <button type="button" className="bet-working" onClick={() => onWorking(!on, id)}>
+                        {on ? 'ON' : 'OFF'}
+                      </button>
+                    ) : (
+                      <span className="bet-working is-fixed" title="Always working">&mdash;</span>
+                    )}
+                    <button
+                      type="button"
+                      className="bet-down"
+                      onClick={() => onTakeDown(id)}
+                      disabled={d.contract && !id.startsWith('dont') && !(id === 'pass' && state.phase === 'come-out')}
+                      title="Take it down"
+                    >
+                      &times;
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className="money" title="On the rail, and on the felt">
+          <strong>{money(state.bankroll)}</strong>
+          <span>{money(atRisk(state))} out</span>
         </div>
 
         <div className="chips" role="group" aria-label="Chip denominations">
@@ -79,146 +134,58 @@ export default function Rail({
             <ChipButton
               key={c.value}
               value={c.value}
+              size={46}
               selected={denom === c.value}
               disabled={c.value > state.bankroll}
               onSelect={onDenom}
             />
           ))}
         </div>
-      </div>
 
-      <div className="rail-mid">
-        <div className={`say${say?.kind === 'refused' ? ' is-refused' : ''}`} aria-live="polite">
-          {say?.text ?? (comeOut ? 'Coming out. Bet the line.' : `The point is ${state.point}.`)}
-        </div>
-
-        <div className="actions">
-          {/* Place and buy are the same chips in the same box - what separates
-              them is the 5% and the better price, so it is a mode rather than
-              two spots. */}
+        <div className="doings">
+          {/* Place and buy are the same box; which one a click makes is a word
+              to the dealer at a table, so it is a mode here. */}
           <div className="segmented" role="group" aria-label="How to bet the box">
-            <button
-              type="button"
-              className={boxMode === 'place' ? 'is-on' : ''}
-              onClick={() => onBoxMode('place')}
-              aria-pressed={boxMode === 'place'}
-            >
+            <button type="button" className={boxMode === 'place' ? 'is-on' : ''} onClick={() => onBoxMode('place')}>
               Place
             </button>
-            <button
-              type="button"
-              className={boxMode === 'buy' ? 'is-on' : ''}
-              onClick={() => onBoxMode('buy')}
-              aria-pressed={boxMode === 'buy'}
-            >
-              Buy <span className="hint">5% vig</span>
+            <button type="button" className={boxMode === 'buy' ? 'is-on' : ''} onClick={() => onBoxMode('buy')}>
+              Buy
             </button>
           </div>
 
-          <button type="button" onClick={onOdds} disabled={!canOdds}>
-            Odds on everything
+          <button type="button" onClick={onOdds} disabled={!canOdds} title="Back every line bet to the table maximum">
+            Odds
           </button>
-          <button type="button" onClick={() => onWorking(!allWorking(state))}>
-            {allWorking(state) ? 'Turn the box off' : 'Keep the box working'}
+          <button type="button" onClick={() => onWorking(!working)} title="Turn the box on or off for the come-out">
+            Box {working ? 'off' : 'on'}
           </button>
-          <button type="button" onClick={onClearAll} disabled={!standing.length}>
-            Take it all down
+          <button type="button" onClick={onOpening} disabled={!opening?.length} title="Put your saved opening back out">
+            Usual{opening?.length ? ` · ${money(opening.reduce((s, b) => s + b.amount, 0))}` : ''}
           </button>
-        </div>
-
-        {/*
-          The opening. Most players bet the same thing every come-out, and
-          clicking it out chip by chip every time is the single most tedious
-          thing about a craps game. Save it once; put it out with a button, or
-          have it out waiting for you.
-        */}
-        <div className="opening">
-          <button type="button" onClick={onOpening} disabled={!opening?.length}>
-            My opening{opening?.length ? ` · ${money(opening.reduce((s, b) => s + b.amount, 0))}` : ''}
-          </button>
-          <button type="button" className="small" onClick={onSaveOpening} title="Save what is on the felt now">
+          <button type="button" onClick={onSaveOpening} title="Save what is on the felt as your opening">
             Save
           </button>
-          <label className="tick" title="Put it out on every new come-out, without being asked">
+          <label className="tick" title="Put your opening out on every new come-out">
             <input type="checkbox" checked={!!autoOpen} onChange={(e) => onAutoOpen(e.target.checked)} />
-            <span>Automatically</span>
+            <span>Auto</span>
           </label>
+          <button type="button" onClick={onClearAll} disabled={!standing.length} title="Take down everything that can come down">
+            Clear
+          </button>
+          <button
+            type="button"
+            className={showBets ? 'is-on' : ''}
+            onClick={() => onShowBets(!showBets)}
+            title="Odds, come bets and buys have no printed spot — they live here"
+          >
+            Bets · {standing.length}
+          </button>
         </div>
 
-        {/*
-          The press window. A winning place bet is paid alongside and stays
-          where it is - what a table asks you next is whether it goes up. Open
-          until the dice leave the hand, which is the real window.
-        */}
-        {pressable.length > 0 && (
-          <div className="press">
-            <span className="press-title">Paid and still up</span>
-            {pressable.map(({ id, pay }) => (
-              <button key={id} type="button" onClick={() => onPress(id)}>
-                Press {betDef(id).label} <em>+{money(pay)}</em>
-              </button>
-            ))}
-            {pressable.length > 1 && (
-              <button type="button" className="press-all" onClick={() => onPress()}>
-                Press them all
-              </button>
-            )}
-          </div>
-        )}
-
-        <button type="button" className="roll" onClick={onRoll} disabled={rolling}>
-          Roll
-        </button>
-      </div>
-
-      <div className="rail-right">
-        <h2>On the felt</h2>
-        {standing.length === 0 ? (
-          <p className="empty">Nothing out. Pick a chip and put it somewhere.</p>
-        ) : (
-          <ul className="bets">
-            {sortBets(standing).map(([id, bet]) => {
-              const d = betDef(id)
-              const working = isWorking(id, bet, state.phase)
-              return (
-                <li key={id} className={working ? '' : 'is-off'}>
-                  <span className="bet-group">{GROUP_NAME[d.group]}</span>
-                  <span className="bet-name">{d.label}</span>
-                  <span className="bet-amount">
-                    {money(bet.amount)}
-                    {bet.vig ? <em title="commission paid"> +{money(bet.vig)}</em> : null}
-                  </span>
-                  {d.togglable ? (
-                    <button
-                      type="button"
-                      className="bet-working"
-                      onClick={() => onWorking(!working, id)}
-                      title={working ? 'Turn this bet off' : 'Put this bet to work'}
-                    >
-                      {working ? 'ON' : 'OFF'}
-                    </button>
-                  ) : (
-                    <span className="bet-working is-fixed" title="Always working">&mdash;</span>
-                  )}
-                  <button
-                    type="button"
-                    className="bet-down"
-                    onClick={() => onTakeDown(id)}
-                    disabled={d.contract && !id.startsWith('dont')}
-                    title={
-                      d.contract && !id.startsWith('dont')
-                        ? 'A contract bet. It stays until it is decided.'
-                        : 'Take it down'
-                    }
-                  >
-                    &times;
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </div>
+      <button type="button" className="roll" onClick={onRoll} disabled={rolling}>
+        Roll
+      </button>
     </div>
   )
 }

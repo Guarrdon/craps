@@ -125,6 +125,15 @@ check(
 )
 check('all three bonus boxes are on the felt', BONUS_BOXES.every((b) => SPOTS[b.id]))
 
+// The markers are indicators, not bets, and they were big enough to sit on top
+// of the boxes they belong to. This is the check that they clear them.
+{
+  const lowest = Math.max(...TRACKERS.map((t) => t.cy + t.r))
+  const boxTop = Math.min(...BONUS_BOXES.map(() => SPOTS.little.shape.y))
+  check('the markers clear the boxes underneath them', boxTop - lowest >= 12, `${boxTop - lowest} units of air`)
+  check('and stay inside the centre column', TRACKERS.every((t) => t.cx - t.r > 1060 && t.cx + t.r < 1470))
+}
+
 /*
  * The bonus row is the one price on this felt that moves house to house, so
  * what gets printed has to follow the table rather than being fixed. This is

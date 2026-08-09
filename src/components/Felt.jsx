@@ -220,7 +220,7 @@ export default function Felt({
         {TRACKERS.map((t) => (
           <g key={t.number} className={`tracker${marked.has(t.number) ? ' is-marked' : ''}`}>
             <circle cx={t.cx} cy={t.cy} r={t.r} />
-            <text x={t.cx} y={t.cy + 7} textAnchor="middle">{t.number}</text>
+            <text x={t.cx} y={t.cy + 5} textAnchor="middle">{t.number}</text>
           </g>
         ))}
         {BONUS_BOXES.map((b) => (

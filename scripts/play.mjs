@@ -29,9 +29,28 @@ const check = (name, ok, extra = '') => {
 const table = await openTable({ width: 1600, height: 1060 })
 const { page, clickSpot, problems, close } = table
 
-const rail = () => page.locator('.money-big').textContent()
-const bets = () => page.locator('.bets li').count()
+const rail = () => page.locator('.money strong').textContent()
 const puck = () => page.locator('.puck text').textContent()
+
+/*
+ * How many bets are out.
+ *
+ * Read off the rail button rather than by counting rows, because the list now
+ * opens over the table and holding it open would sit on top of the spots this
+ * script is trying to click.
+ */
+const bets = async () =>
+  Number(((await page.locator('.doings button:has-text("Bets")').textContent()) ?? '').split('\u00b7')[1] ?? 0)
+
+// Open the list, do something with the rows, put it away again.
+const withBets = async (fn) => {
+  await page.locator('.doings button:has-text("Bets")').click()
+  await page.locator('.bets-panel').waitFor({ timeout: 4000 })
+  const out = await fn()
+  await page.locator('.bets-panel header button').click()
+  await page.locator('.bets-panel').waitFor({ state: 'detached', timeout: 4000 })
+  return out
+}
 
 // Throw, and wait for the dice to actually stop. Nothing is settled until they
 // have, so reading the felt before then reads the roll before last.
@@ -41,7 +60,14 @@ const roll = async () => {
   await page.waitForTimeout(30)
 }
 
-const hasLine = async () => (await page.locator('.bets li:has-text("Pass Line")').count()) > 0
+// Clear is disabled when there is nothing to clear, which a seven out can
+// leave the table in at any moment.
+const clearAll = async () => {
+  const b = page.locator('.doings button:has-text("Clear")')
+  if (await b.isEnabled()) await b.click()
+}
+
+const hasLine = async () => withBets(() => page.locator('.bets li:has-text("Pass Line")').count()).then((n) => n > 0)
 
 // Get to a clean come-out: nothing marked, the puck off. Where a shooter's
 // turn begins, and the only moment the bonus row will take a bet.
@@ -102,7 +128,7 @@ try {
 
   // --- odds on everything
   const before = await bets()
-  await page.locator('button:has-text("Odds on everything")').click()
+  await page.locator('.doings button:has-text("Odds")').click()
   check('odds go up behind the line', (await bets()) > before, await table.say())
 
   // --- a come bet, which has to travel
@@ -131,7 +157,7 @@ try {
   {
     const held = await bets()
     const railBefore = await rail()
-    await page.locator('.bets li:has-text("Place 8") .bet-down').click()
+    await withBets(() => page.locator('.bets li:has-text("Place 8") .bet-down').click())
     check('a place bet comes down from the list', (await bets()) === held - 1)
     check('and the money comes back', (await rail()) !== railBefore)
 
@@ -144,15 +170,16 @@ try {
     await page.mouse.click(x, y, { button: 'right' })
     check('right-clicking a stack takes it down', (await bets()) === held - 2)
 
-    const line = page.locator('.bets li:has-text("Pass Line") .bet-down')
-    check('a contract bet refuses to come down', await line.isDisabled())
+    const contract = await withBets(() =>
+      page.locator('.bets li:has-text("Pass Line") .bet-down').isDisabled())
+    check('a contract bet refuses to come down', contract)
   }
 
   // --- turn the box off and on again
-  await page.locator('button:has-text("Turn the box off")').click()
-  check('the box can be turned off', (await page.locator('.bets li.is-off').count()) > 0)
-  await page.locator('button:has-text("Keep the box working")').click()
-  check('and back on', (await page.locator('.bets li.is-off').count()) === 0)
+  await page.locator('.doings button:has-text("Box off")').click()
+  check('the box can be turned off', (await withBets(() => page.locator('.bets li.is-off').count())) > 0)
+  await page.locator('.doings button:has-text("Box on")').click()
+  check('and back on', (await withBets(() => page.locator('.bets li.is-off').count())) === 0)
 
   // --- the throw itself
   {
@@ -273,17 +300,17 @@ try {
     // The bonus row only takes a bet on a clean come-out, which is the whole
     // point of it - so the opening has to be laid out on one.
     await comeOut()
-    await page.locator('button:has-text("Take it all down")').click()
+    await clearAll()
     await page.locator('.chip-button').nth(1).click() // $5
     for (const id of ['pass', 'little', 'big']) await clickSpot(id)
     const usual = await bets()
     check('the usual opening goes out: line, Little and Big', usual === 3, `${usual} bets`)
-    await page.locator('.opening button:has-text("Save")').click()
+    await page.locator('.doings button:has-text("Save")').click()
     check('and saves', /Saved/.test(await table.say()), (await table.say()).trim())
 
-    await page.locator('button:has-text("Take it all down")').click()
+    await clearAll()
     const bare = await bets()
-    await page.locator('.opening button:has-text("My opening")').click()
+    await page.locator('.doings button:has-text("Usual")').click()
     check('and comes back in one click', (await bets()) === 3, `${bare} → ${await bets()}`)
     check('for the same money', /\$20/.test(await table.say()), (await table.say()).trim())
   }
@@ -326,20 +353,67 @@ try {
    * which is what nearly everyone at a table does with it.
    */
   {
-    await page.locator('button:has-text("Take it all down")').click()
+    await clearAll()
     let made = false
     for (let i = 0; i < 200 && !made; i++) {
       if (!(await onPoint())) break
-      const staked = await page.locator('.bets li:has-text("Pass Line") .bet-amount').textContent()
+      const staked = await withBets(() =>
+        page.locator('.bets li:has-text("Pass Line") .bet-amount').textContent())
       await roll()
       if (/the winner/i.test((await table.say()) ?? '')) {
         made = true
         check('the point being made leaves the line where it was', await hasLine())
-        check('for the same money', (await page.locator('.bets li:has-text("Pass Line") .bet-amount').textContent()) === staked, staked)
+        const after = await withBets(() =>
+          page.locator('.bets li:has-text("Pass Line") .bet-amount').textContent())
+        check('for the same money', after === staked, staked)
         check('and the table is coming out again', (await puck()) === 'OFF')
       }
     }
     check('a point was made to check it against', made)
+  }
+
+  /*
+   * --- training mode
+   *
+   * Point at a spot and be told what it is, rather than betting on it. The
+   * numbers come from the catalogue, so this is also a check that a lesson
+   * cannot describe a bet the felt no longer makes.
+   */
+  {
+    const outBefore = await bets()
+    await page.locator('.top nav button.teach').click()
+    await clickSpot('any7')
+    await page.locator('.lesson').waitFor({ timeout: 4000 })
+    const seven = await page.locator('.lesson').textContent()
+    check('pointing at a spot explains it instead of betting', (await bets()) === outBefore)
+    check('it names the bet', /Seven/.test(seven))
+    check('and says how often it comes in', /6 ways in 36/.test(seven), '6 ways in 36')
+    check('and what it is worth against what it pays', /5:1/.test(seven) && /4:1/.test(seven))
+    check('and what it costs', /16\.67/.test(seven))
+    check('and what the stickman says', /Down with all the props/i.test(seven))
+
+    // And it stays on the table. Pointed at a spot near an edge it has to flip
+    // to whichever side has room, or half the lesson is off the screen.
+    const onTable = await page.evaluate(() => {
+      const l = document.querySelector('.lesson').getBoundingClientRect()
+      return l.left >= 0 && l.right <= window.innerWidth && l.top >= 0 && l.bottom <= window.innerHeight
+    })
+    check('and the whole of it is on the screen', onTable)
+    await page.screenshot({ path: OUT.replace(/\.png$/, '-teach.png') })
+
+    // The neighbouring bet, which pays nearly twice as much and costs less -
+    // the comparison the whole mode exists to make possible.
+    await page.keyboard.press('Escape')
+    await clickSpot('anycraps')
+    await page.locator('.lesson').waitFor({ timeout: 4000 })
+    const craps = await page.locator('.lesson').textContent()
+    check('the bet beside it pays more', /7:1/.test(craps))
+    check('and costs less', /11\.11/.test(craps))
+
+    await page.keyboard.press('Escape')
+    await page.locator('.top nav button.teach').click()
+    await clickSpot('yo')
+    check('and betting works again once it is off', (await bets()) > outBefore)
   }
 
   // Leave the felt in a state worth photographing: a point, chips in several
@@ -356,7 +430,7 @@ try {
   for (const id of ['place-6', 'place-8', 'place-5', 'field', 'hard-8', 'yo', 'hop-3-3', 'little']) {
     await clickSpot(id)
   }
-  await page.locator('button:has-text("Odds on everything")').click()
+  await page.locator('.doings button:has-text("Odds")').click()
   await page.waitForTimeout(120)
 
   mkdirSync(dirname(OUT), { recursive: true })

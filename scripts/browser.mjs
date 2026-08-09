@@ -11,13 +11,24 @@ import { spawn } from 'node:child_process'
 import { chromium } from 'playwright'
 import { FELT, probeAt } from '../src/lib/layout.js'
 
-export async function openTable({ port = 5197, width = 1500, height = 1000, headless = true } = {}) {
-  const server = spawn('npx', ['vite', '--port', String(port), '--strictPort'], {
-    stdio: ['ignore', 'pipe', 'inherit'],
-  })
-  await new Promise((ok, fail) => {
+export async function openTable({ width = 1500, height = 1000, headless = true, query = '' } = {}) {
+  /*
+   * Let vite pick the port and read back which one it took.
+   *
+   * Fixed ports were fine until two of these ran near each other and the
+   * second died on "port already in use" - or worse, quietly attached to a
+   * server left behind by an earlier run and measured the wrong build.
+   */
+  const server = spawn('npx', ['vite', '--port', '0'], { stdio: ['ignore', 'pipe', 'inherit'] })
+  const port = await new Promise((ok, fail) => {
     const timer = setTimeout(() => fail(new Error('vite did not start')), 30000)
-    server.stdout.on('data', (c) => String(c).includes('Local:') && (clearTimeout(timer), ok()))
+    server.stdout.on('data', (c) => {
+      const found = /localhost:(\d+)/.exec(String(c))
+      if (found) {
+        clearTimeout(timer)
+        ok(Number(found[1]))
+      }
+    })
   })
 
   const browser = await chromium.launch({ headless })
@@ -36,7 +47,7 @@ export async function openTable({ port = 5197, width = 1500, height = 1000, head
   })
   page.on('pageerror', (e) => problems.push(`uncaught: ${e.message}`))
 
-  await page.goto(`http://localhost:${port}/`, { waitUntil: 'networkidle' })
+  await page.goto(`http://localhost:${port}/${query}`, { waitUntil: 'networkidle' })
   await page.evaluate(() => document.fonts.ready)
 
   const place = async (id) => {
@@ -57,7 +68,8 @@ export async function openTable({ port = 5197, width = 1500, height = 1000, head
       const { x, y } = await place(id)
       await page.mouse.click(x, y)
     },
-    say: () => page.locator('.say').textContent(),
+    // The call lives on the cloth now, not in the rail.
+    say: () => page.locator('.call').textContent().catch(() => ''),
     close: async () => {
       await browser.close()
       server.kill('SIGTERM')

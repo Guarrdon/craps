@@ -211,14 +211,15 @@ const cx = (C.left + C.right) / 2
  * what lets the markers be big enough to read across a table.
  */
 export const TRACKER_ROWS = [
-  { key: 'low', numbers: [2, 3, 4, 5, 6], cy: 52 },
-  { key: 'high', numbers: [8, 9, 10, 11, 12], cy: 104 },
+  { key: 'low', numbers: [2, 3, 4, 5, 6], cy: 48 },
+  { key: 'high', numbers: [8, 9, 10, 11, 12], cy: 86 },
 ]
-const TRACK_X0 = 1090
-const TRACK_STEP = 70
+const TRACK_STEP = 50
+const TRACK_X0 = 1265 - (TRACK_STEP * 5) / 2 // centred over the bonus boxes
+const TRACK_R = 16
 
 export const TRACKERS = TRACKER_ROWS.flatMap(({ numbers, cy }) =>
-  numbers.map((n, i) => ({ number: n, cx: TRACK_X0 + TRACK_STEP * (i + 0.5), cy, r: 24 })),
+  numbers.map((n, i) => ({ number: n, cx: TRACK_X0 + TRACK_STEP * (i + 0.5), cy, r: TRACK_R })),
 )
 
 // Which markers a bet is watching, so a spot can be shown as close to home as

@@ -5,6 +5,7 @@ import Dice from './components/Dice.jsx'
 import { ChipStack, Puck } from './components/Chips.jsx'
 import { Payouts, Readout, settlingTime } from './components/Crew.jsx'
 import { HelpDialog, RulesDialog, SettingsDialog, StatsDialog } from './components/Dialogs.jsx'
+import Lesson from './components/Lesson.jsx'
 import { CHIPS, OPENING_RAIL, money } from './lib/bank.js'
 import { betDef, isWorking } from './lib/bets.js'
 import { callFor, ledgerFor } from './lib/calls.js'
@@ -54,6 +55,10 @@ export default function App() {
   // Bets that just won and are still standing. They can be pressed until the
   // next throw, which is the window a table actually gives you.
   const [pressable, setPressable] = useState([])
+  // Training mode, and which spot is currently being asked about.
+  const [teaching, setTeaching] = useState(false)
+  const [lesson, setLesson] = useState(null)
+  const [showBets, setShowBets] = useState(false)
 
   const { denom, boxMode } = prefs
   const setPref = useCallback((patch) => setPrefs((p) => ({ ...p, ...patch })), [])
@@ -126,12 +131,17 @@ export default function App() {
       // checking that the felt's geometry answers to a click, and a felt that
       // fills up with chips as it is being measured is measuring the chips.
       if (PROBE_ONLY) return
+      // Training mode: a click asks what the spot is rather than betting on it.
+      if (teaching) {
+        setLesson(id)
+        return
+      }
       // Place and buy are the same box. Which one a click makes is the mode on
       // the rail, the way it is a word to the dealer at a table.
       const target = boxMode === 'buy' && id.startsWith('place-') ? id.replace('place-', 'buy-') : id
       put(target, denom)
     },
-    [boxMode, denom, put],
+    [boxMode, denom, put, teaching],
   )
 
   const onOdds = useCallback(() => {
@@ -380,6 +390,20 @@ export default function App() {
           <span className="top-dim">{state.phase === 'come-out' ? 'Coming out' : `Point ${state.point}`}</span>
         </div>
         <nav>
+          {/* Training mode. A click on the felt asks what the spot is instead
+              of putting money on it, which is the difference between a rules
+              page and learning the table. */}
+          <button
+            type="button"
+            className={`teach${teaching ? ' is-on' : ''}`}
+            onClick={() => {
+              setTeaching((t) => !t)
+              setLesson(null)
+            }}
+            aria-pressed={teaching}
+          >
+            {teaching ? 'Stop explaining' : 'Explain the felt'}
+          </button>
           <button type="button" onClick={() => setOpen('rules')}>Every bet</button>
           <button type="button" onClick={() => setOpen('stats')}>Session</button>
           <button type="button" onClick={() => setOpen('table')}>Table</button>
@@ -388,9 +412,12 @@ export default function App() {
       </header>
 
       <div className="table">
+        {/* Only ever seen on a phone held upright, where a table nearly twice
+            as wide as it is tall has nowhere to go. */}
+        <p className="turn-it">Turn your phone sideways for the whole table.</p>
         {/* The felt and the dice share one box, so a percentage of it is the
             same place on the cloth for both and they cannot drift apart. */}
-        <div className="felt-frame">
+        <div className={`felt-frame${teaching ? ' is-teaching-felt' : ''}`}>
           <Felt onSpot={onSpot} point={state.point} marked={state.marked} bonus={state.table.bonus}>
             <g className="on-felt">
               <Puck point={state.point} />
@@ -421,7 +448,20 @@ export default function App() {
           {/* The roll being settled, not the table's - during settlement the
               table still holds the roll before, because what is on the felt is
               what is being paid. */}
-          <Readout roll={settling?.roll ?? state.lastRoll} text={say?.text} tone={say?.kind} />
+          <Readout
+            roll={settling?.roll ?? state.lastRoll}
+            text={teaching ? 'Point at anything on the felt.' : say?.text}
+            tone={teaching ? 'teach' : say?.kind}
+          />
+          {lesson && (
+            <Lesson
+              id={lesson}
+              table={state.table}
+              point={state.point}
+              at={chipAt(lesson)}
+              onClose={() => setLesson(null)}
+            />
+          )}
         </div>
         {ledger?.lines.length > 0 && (
           <ul className="ledger">
@@ -452,6 +492,9 @@ export default function App() {
         onSaveOpening={onSaveOpening}
         autoOpen={prefs.autoOpen}
         onAutoOpen={(v) => setPref({ autoOpen: v })}
+        showBets={showBets}
+        onShowBets={setShowBets}
+        teaching={teaching}
       />
 
       {open === 'rules' && <RulesDialog table={state.table} onClose={() => setOpen(null)} />}

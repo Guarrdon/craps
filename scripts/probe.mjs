@@ -14,39 +14,17 @@
  *   node scripts/probe.mjs
  */
 
-import { spawn } from 'node:child_process'
-import { chromium } from 'playwright'
-import { FELT, SPOTS, SPOT_IDS, probeAt } from '../src/lib/layout.js'
+import { openTable } from './browser.mjs'
+import { SPOTS, SPOT_IDS } from '../src/lib/layout.js'
 
-const PORT = 5198
-const WIDTH = 1500
-const HEIGHT = 860
-
-const server = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
-  stdio: ['ignore', 'pipe', 'inherit'],
-})
-const ready = new Promise((ok, fail) => {
-  const timer = setTimeout(() => fail(new Error('vite did not start')), 30000)
-  server.stdout.on('data', (c) => String(c).includes('Local:') && (clearTimeout(timer), ok()))
-})
+// ?probe records what was clicked and bets nothing. What is being measured
+// here is the felt, and a felt that fills with chips as it is measured is
+// measuring the chips.
+const table = await openTable({ width: 1500, height: 980, query: '?probe' })
+const { page, clickSpot, close } = table
 
 let failures = 0
 try {
-  await ready
-  const browser = await chromium.launch()
-  const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT } })
-  // ?probe records what was clicked and bets nothing. What is being measured
-  // here is the felt, and a felt that fills with chips as it is measured is
-  // measuring the chips.
-  await page.goto(`http://localhost:${PORT}/?probe`, { waitUntil: 'networkidle' })
-
-  // The felt letterboxes itself inside the viewport, so felt coordinates have
-  // to be mapped through where the svg actually ended up.
-  const box = await page.locator('svg.felt').boundingBox()
-  const scale = Math.min(box.width / FELT.w, box.height / FELT.h)
-  const originX = box.x + (box.width - FELT.w * scale) / 2
-  const originY = box.y + (box.height - FELT.h * scale) / 2
-
   const read = () =>
     page.evaluate(() => {
       const el = document.querySelector('.probe')
@@ -56,8 +34,7 @@ try {
   const drawn = SPOT_IDS.filter((id) => SPOTS[id].shape)
   let seen = 0
   for (const id of drawn) {
-    const [fx, fy] = probeAt(id)
-    await page.mouse.click(originX + fx * scale, originY + fy * scale)
+    await clickSpot(id)
     const got = await read()
     // A click that lands on nothing leaves the readout exactly as it was, and
     // would otherwise read as a pass for whatever was clicked before it.
@@ -69,9 +46,8 @@ try {
   }
 
   console.log(`\nprobe: ${drawn.length - failures}/${drawn.length} spots answer to a click at their chip`)
-  await browser.close()
 } finally {
-  server.kill('SIGTERM')
+  await close()
 }
 
 if (failures) process.exit(1)
