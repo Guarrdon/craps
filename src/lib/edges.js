@@ -117,6 +117,11 @@ export function chanceOfAll(numbers) {
  */
 export const BONUS_PAYTABLES = {
   '30': { label: '30 to 1 · 150 to 1', also: '31 for 1 · 151 for 1', pays: { little: 30, big: 30, all: 150 } },
+  // A genuine 31 *to* one, which is a dollar better on the small bets than the
+  // 31 *for* one that reads the same on a sign. Worth about two and a half
+  // points of edge, and worth having as a distinct option precisely because
+  // the two are so easy to confuse.
+  '31': { label: '31 to 1 · 150 to 1', also: '32 for 1 · 151 for 1', pays: { little: 31, big: 31, all: 150 } },
   '34': { label: '34 to 1 · 175 to 1', also: '35 for 1 · 176 for 1', pays: { little: 34, big: 34, all: 175 } },
 }
 

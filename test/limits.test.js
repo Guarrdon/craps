@@ -2,7 +2,7 @@ import { check, done, eq } from './harness.js'
 import { DEFAULT_TABLE, check as legal, maxBet, maxOdds, rangeFor, unitFor, vigFor } from '../src/lib/limits.js'
 import { POINTS } from '../src/lib/bets.js'
 
-const table = DEFAULT_TABLE // $10 line, 3-4-5x
+const table = DEFAULT_TABLE // $25 line, 3-4-5x
 const ctx = (over = {}) => ({ table, phase: 'point', point: 6, bets: {}, marked: new Set(), bankroll: 100000, ...over })
 const why = (id, amount, over) => legal(id, amount, ctx(over)).reason
 
@@ -26,9 +26,14 @@ eq('laying against a five comes in threes', unitFor('dontpass-odds', { point: 5 
 eq('laying against a six comes in sixes', unitFor('dontpass-odds', { point: 6 }), 6)
 
 check('$25 on the six is refused', !legal('place-6', 25, ctx()).ok)
-check('the refusal says what to make it', /\$24 or \$30/.test(why('place-6', 25)), why('place-6', 25))
+// On a $25 table $24 is under the minimum, so there is only one answer and
+// the refusal says one number rather than the same one twice.
+check('the refusal says what to make it', /Make it \$30\./.test(why('place-6', 25)), why('place-6', 25))
 check('$30 on the six is taken', legal('place-6', 30, ctx()).ok)
-check('$12 on the six is taken', legal('place-6', 12, ctx()).ok)
+check('$12 on the six is under a $25 minimum', !legal('place-6', 12, ctx()).ok)
+check('but fine on a $10 table', legal('place-6', 12, ctx({ table: { ...table, min: 10 } })).ok)
+check('and there the refusal offers both ways', /\$24 or \$30/.test(
+  legal('place-6', 25, ctx({ table: { ...table, min: 10 } })).reason))
 check('$25 on the five is taken', legal('place-5', 25, ctx()).ok)
 check('$4 on the horn is taken', legal('horn', 4, ctx()).ok)
 check('$5 on the horn is refused', !legal('horn', 5, ctx()).ok)
@@ -96,13 +101,13 @@ eq('going from $20 to $100 on a buy costs the difference', legal('buy-4', 80, ct
 // ------------------------------------------------------- when a spot is open
 
 check('the come box is shut on a come-out', !legal('come', 10, ctx({ phase: 'come-out', point: null })).ok)
-check('the come box is open once the point is out', legal('come', 10, ctx()).ok)
+check('the come box is open once the point is out', legal('come', 25, ctx()).ok)
 check('the pass line is shut once the point is out', !legal('pass', 10, ctx()).ok)
 check('and it points you at the come', /Come/.test(why('pass', 10)), why('pass', 10))
 check("don't pass is shut once the point is out", !legal('dontpass', 10, ctx()).ok)
-check('the pass line is open on a come-out', legal('pass', 10, ctx({ phase: 'come-out', point: null })).ok)
+check('the pass line is open on a come-out', legal('pass', 25, ctx({ phase: 'come-out', point: null })).ok)
 
-check('the field is always open', legal('field', 10, ctx({ phase: 'come-out', point: null })).ok)
+check('the field is always open', legal('field', 25, ctx({ phase: 'come-out', point: null })).ok)
 check('a hop is always open', legal('hop-3-4', 1, ctx({ phase: 'come-out', point: null })).ok)
 check('place bets can go up on a come-out', legal('place-6', 30, ctx({ phase: 'come-out', point: null })).ok)
 
@@ -115,14 +120,14 @@ check('and not mid-point', !legal('all', 5, ctx()).ok)
 
 // ---------------------------------------------------------------- the sizes
 
-eq('the line minimum is $10', rangeFor('pass', { table }).min, 10)
+eq('the line minimum is $25', rangeFor('pass', { table }).min, 25)
 eq('the centre takes a dollar', rangeFor('hop-3-4', { table }).min, 1)
 eq('and so do the hardways - they are the stickman\'s too', rangeFor('hard-8', { table }).min, 1)
 check('$1 on the hard eight is fine on a $10 table', legal('hard-8', 1, ctx()).ok)
 eq('the bonus takes a dollar', rangeFor('all', { table }).min, 1)
-check('$5 on the line is refused on a $10 table', !legal('pass', 5, ctx({ phase: 'come-out', point: null })).ok)
-check('the refusal names the minimum', /\$10 minimum/.test(why('pass', 5, { phase: 'come-out', point: null })))
-check('$1 on the yo is fine on a $10 table', legal('yo', 1, ctx()).ok)
+check('$5 on the line is refused on a $25 table', !legal('pass', 5, ctx({ phase: 'come-out', point: null })).ok)
+check('the refusal names the minimum', /\$25 minimum/.test(why('pass', 5, { phase: 'come-out', point: null })))
+check('$1 on the yo is fine however high the line is', legal('yo', 1, ctx()).ok)
 check('over the table maximum is refused', !legal('pass', 6000, ctx({ phase: 'come-out', point: null })).ok)
 check('over the prop maximum is refused', !legal('yo', 600, ctx()).ok)
 

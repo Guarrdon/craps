@@ -75,7 +75,8 @@ export const brief = (n) => {
   return `${k % 1 === 0 ? k : k.toFixed(2).replace(/0$/, '')}k`
 }
 
-// The starting rail. A thousand dollars is thirty three bets at a $30 six,
-// which is long enough to see a shooter through and short enough that the
-// bankroll is a real constraint.
-export const OPENING_RAIL = 1000
+// The starting rail. Two thousand is eighty bets at a $25 line - long enough
+// to see a cold shooter through and back the odds, short enough that the
+// bankroll is still a real constraint. Below about forty times the minimum,
+// one bad hand ends the session and nothing about the game gets shown.
+export const OPENING_RAIL = 2000

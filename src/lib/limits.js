@@ -14,7 +14,7 @@
 import { BETS, LAY_ODDS, PLACE_PAYS, POINTS, TRUE_ODDS, betDef } from './bets.js'
 
 export const DEFAULT_TABLE = {
-  min: 10, // the line
+  min: 25, // the line
   max: 5000,
   propMin: 1, // the centre. A dollar has always been enough for a hop.
   propMax: 500,
@@ -235,9 +235,13 @@ export function check(id, amount, ctx = {}) {
   if (total % unit !== 0) {
     const down = Math.floor(total / unit) * unit
     const up = down + unit
+    // Only offer the smaller number if it is still a bet the table would take.
+    // On a $25 table the six cannot be $24, so the only answer is $30 - and
+    // saying "make it $30 or $30" is worse than saying one number.
+    const options = down >= min ? `${money(down)} or ${money(up)}` : money(up)
     return no(
       `${betDef(id).label} pays in ${money(unit)} steps, so it cannot be paid on ${money(total)}. ` +
-        `Make it ${money(down >= min ? down : up)} or ${money(up)}.`,
+        `Make it ${options}.`,
     )
   }
 

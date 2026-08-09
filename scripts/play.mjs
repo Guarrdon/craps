@@ -120,7 +120,10 @@ try {
   await page.locator('.chip-button').nth(1).click() // $5
   await clickSpot('place-6')
   const said = await table.say()
-  check('a red chip on the six becomes a bet the six can pay', /12/.test(said), said.trim())
+  // On a $25 table the six cannot be $25 (7:6 will not pay on it) and cannot
+  // be $24 either, so a red chip becomes $30 - which is the number every
+  // regular has in front of them for exactly this reason.
+  check('a red chip on the six becomes a bet the six can pay', /30/.test(said), said.trim())
 
   await page.locator('.chip-button').nth(2).click() // $25
   await clickSpot('place-8')
@@ -262,6 +265,14 @@ try {
     check(`the ${button} screen fits on the screen`, fits.onScreen)
     check(`and its content can be scrolled to the end`, fits.scrollable && fits.reachesEnd)
 
+    // The bonus row is the one price that differs house to house, so the
+    // table screen has to offer the ones a house might actually be running.
+    if (button === 'Table') {
+      const rates = await page.locator('.dialog select').last().locator('option').allTextContents()
+      check('the bonus row offers every pay table', rates.length === 3, rates.join(' / '))
+      check('including a straight 31 to 1', rates.some((r) => r.startsWith('31 to 1')), rates.join(' / '))
+    }
+
     await page.keyboard.press('Escape')
     await page.locator('.dialog').waitFor({ state: 'detached', timeout: 4000 })
   }
@@ -273,6 +284,7 @@ try {
   check('the rules screen quotes the house edge', /1\.414%/.test(rules))
   check('and says the odds cost nothing', /nothing/.test(rules))
   check('and covers the bonus row', /Boom or Bust/i.test(rules))
+  check('and quotes the bonus row at the rate this table runs', /18\.30%/.test(rules), '30 to 1')
   await page.waitForTimeout(400) // the dialog fades in; a shot before it lands is a shot of the fade
   await page.screenshot({ path: OUT.replace(/\.png$/, '-rules.png') })
   await page.keyboard.press('Escape')
@@ -312,7 +324,8 @@ try {
     const bare = await bets()
     await page.locator('.doings button:has-text("Usual")').click()
     check('and comes back in one click', (await bets()) === 3, `${bare} → ${await bets()}`)
-    check('for the same money', /\$20/.test(await table.say()), (await table.say()).trim())
+    // $25 on the line plus a five on each of Little and Big.
+    check('for the same money', /\$35/.test(await table.say()), (await table.say()).trim())
   }
 
   /*

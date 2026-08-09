@@ -5,7 +5,17 @@ import { makeRng, roll } from '../src/lib/rng.js'
 import { BET_IDS, betDef } from '../src/lib/bets.js'
 import { maxBet, vigFor } from '../src/lib/limits.js'
 
-const start = (over = {}) => ({ ...newTable(), bankroll: 5000, ...over })
+/*
+ * A $10 table, so the arithmetic in these checks stays legible.
+ *
+ * The default is $25 and limits.test.js covers that. What is being tested here
+ * is the mechanics of putting money down and taking it back, and a minimum
+ * that swallows the numbers only makes the assertions harder to read.
+ */
+const start = (over = {}) => {
+  const s = newTable()
+  return { ...s, table: { ...s.table, min: 10 }, bankroll: 5000, ...over }
+}
 
 // ------------------------------------------------------------- placing bets
 
