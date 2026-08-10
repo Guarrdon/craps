@@ -1,5 +1,5 @@
 import { check, done, eq, near } from './harness.js'
-import { baseOf, newTable, placeBet, pressAmount, railTotal, reducer, regress, setWorking, takeDown } from '../src/lib/table.js'
+import { baseOf, newTable, placeBet, pressAmount, railTotal, reducer, regress, setWorking, sweepable, takeDown } from '../src/lib/table.js'
 import { atRisk } from '../src/lib/rules.js'
 import { makeRng, roll } from '../src/lib/rng.js'
 import { BET_IDS, betDef } from '../src/lib/bets.js'
@@ -103,6 +103,40 @@ const start = (over = {}) => {
   s = placeBet(s, 'buy-4', 100)
   s = takeDown(s, 'buy-4')
   eq('taking a buy down does not refund the commission', s.bankroll, 4995)
+}
+
+/*
+ * ------------------------------------------------------------------ the sweep
+ *
+ * "Take it all down" is a tidy-up, so it steps over anything it cannot pick up
+ * rather than refusing, and it leaves the bonus row alone: those only go back
+ * up on a clean board, so a convenience button must not be able to end them.
+ */
+{
+  let s = start()
+  s = placeBet(s, 'little', 10)
+  s = placeBet(s, 'pass', 10)
+  s = reducer(s, { type: 'roll', roll: { a: 3, b: 3, total: 6 } }) // point six, and a marked six
+  s = placeBet(s, 'place-8', 30)
+  s = placeBet(s, 'field', 10)
+
+  const rail = s.bankroll
+  const after = reducer(s, { type: 'sweep' })
+  check('the sweep takes the place bet down', !after.bets['place-8'])
+  check('and the field', !after.bets.field)
+  check('the pass line is a contract and stays', after.bets.pass?.amount === 10)
+  check('the bonus bet stays too', after.bets.little?.amount === 10)
+  eq('and only what came down is back on the rail', after.bankroll, rail + 40)
+  check('stepping over a contract bet is not a refusal', !after.refused)
+
+  // Nothing left that the sweep would touch.
+  eq('the sweep knows when there is nothing to sweep', sweepable(after).length, 0)
+  check('and running it again changes nothing', reducer(after, { type: 'sweep' }).bets === after.bets)
+
+  // The × on the bet itself still comes down - that is a decision, not a tidy-up.
+  const gone = takeDown(after, 'little')
+  check('but taking the bonus bet down by hand still works', !gone.bets.little)
+  check('and it cannot go back up on a board already under way', !!placeBet(gone, 'little', 10).refused)
 }
 
 /*

@@ -23,6 +23,8 @@ export function reducer(state, action) {
       return placeBet(state, action.id, action.amount, { keepBase: action.press })
     case 'takedown':
       return takeDown(state, action.id)
+    case 'sweep':
+      return sweep(state)
     case 'working':
       return setWorking(state, action.id, action.on)
     case 'odds':
@@ -110,9 +112,7 @@ export function placeBet(state, id, amount, { keepBase = false } = {}) {
  * is allowed here for the same reason it is allowed at a table - it is the
  * player's money - and the interface says what it costs.
  */
-export function takeDown(state, id) {
-  const bet = state.bets[id]
-  if (!bet) return state
+export function canTakeDown(state, id) {
   const d = betDef(id)
 
   // A line bet is only a contract once it has a number to be decided against.
@@ -121,7 +121,15 @@ export function takeDown(state, id) {
   // for nothing is the worst trade on the table.
   const loose = (id === 'pass' || id === 'dontpass') && state.phase === 'come-out'
 
-  if (d.contract && !id.startsWith('dont') && !loose) {
+  return !(d.contract && !id.startsWith('dont') && !loose)
+}
+
+export function takeDown(state, id) {
+  const bet = state.bets[id]
+  if (!bet) return state
+  const d = betDef(id)
+
+  if (!canTakeDown(state, id)) {
     return refuse(state, `${d.label} is a contract bet. It stays until it is decided.`)
   }
 
@@ -142,6 +150,35 @@ export function takeDown(state, id) {
   // the price was given.
   return { ...state, bets, bankroll: state.bankroll + returned, refused: null }
 }
+
+/*
+ * "Take it all down."
+ *
+ * A tidy-up, and it is treated as one. Contract bets are stepped over rather
+ * than refused - the player asked for everything that can come down, and being
+ * told the pass line is staying is not news.
+ *
+ * The bonus row is stepped over too, and that one is a deliberate rule rather
+ * than a convenience. Every other bet here can go straight back up on the next
+ * throw; Little, Big and Boom only go up on a clean board, so taking one down
+ * mid-shooter ends it until somebody sevens out. One button that empties the
+ * felt should not also be the one button that cannot be undone. The × on a
+ * single bet still comes down, because that is a decision about that bet.
+ */
+export function sweep(state) {
+  let next = state
+  for (const id of Object.keys(state.bets)) {
+    if (betDef(id).group === 'bonus') continue
+    if (!canTakeDown(next, id)) continue
+    next = takeDown(next, id)
+  }
+  return next === state ? clearRefusal(state) : { ...next, refused: null }
+}
+
+// What the sweep would actually pick up, so the interface can grey the button
+// out rather than offering a click that does nothing.
+export const sweepable = (state) =>
+  Object.keys(state.bets).filter((id) => betDef(id).group !== 'bonus' && canTakeDown(state, id))
 
 /*
  * "Odds on everything."

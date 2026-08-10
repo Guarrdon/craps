@@ -204,9 +204,16 @@ export default function App() {
     [state.bets],
   )
 
+  // The bonus row survives this on purpose - see sweep() in table.js.
   const onClearAll = useCallback(() => {
-    for (const id of Object.keys(state.bets)) dispatch({ type: 'takedown', id })
-    setSay({ kind: 'bet', text: 'Everything that can come down is down.' })
+    const bonus = Object.keys(state.bets).some((id) => betDef(id).group === 'bonus')
+    dispatch({ type: 'sweep' })
+    setSay({
+      kind: 'bet',
+      text: bonus
+        ? 'Everything that can come down is down. The bonus row rides with the shooter.'
+        : 'Everything that can come down is down.',
+    })
   }, [state.bets])
 
   // --- throwing

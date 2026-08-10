@@ -19,7 +19,7 @@ import { betDef, isWorking } from '../lib/bets.js'
 import { CHIPS, money } from '../lib/bank.js'
 import { ChipButton } from './Chips.jsx'
 import { atRisk } from '../lib/rules.js'
-import { baseOf } from '../lib/table.js'
+import { baseOf, canTakeDown, sweepable } from '../lib/table.js'
 
 const GROUP_ORDER = ['line', 'odds', 'box', 'field', 'centre', 'hardway', 'hop', 'bonus']
 const GROUP_NAME = {
@@ -56,6 +56,9 @@ export default function Rail({
     const d = betDef(id)
     return d.group === 'line' && (d.number || state.point)
   })
+  // The sweep steps over contract bets and the bonus row, so a felt holding
+  // only those has nothing to sweep - see sweep() in table.js.
+  const canSweep = sweepable(state).length > 0
   const working = allWorking(state)
 
   return (
@@ -142,8 +145,8 @@ export default function Rail({
                       type="button"
                       className="bet-down"
                       onClick={() => onTakeDown(id)}
-                      disabled={d.contract && !id.startsWith('dont') && !(id === 'pass' && state.phase === 'come-out')}
-                      title="Take it down"
+                      disabled={!canTakeDown(state, id)}
+                      title={d.group === 'bonus' ? 'Take it down — it cannot go back up until a new shooter' : 'Take it down'}
                     >
                       &times;
                     </button>
@@ -201,7 +204,12 @@ export default function Rail({
             <input type="checkbox" checked={!!autoOpen} onChange={(e) => onAutoOpen(e.target.checked)} />
             <span>Auto</span>
           </label>
-          <button type="button" onClick={onClearAll} disabled={!standing.length} title="Take down everything that can come down">
+          <button
+            type="button"
+            onClick={onClearAll}
+            disabled={!canSweep}
+            title="Take down everything that can come down — Little, Big and Boom stay out"
+          >
             Clear
           </button>
           <button
