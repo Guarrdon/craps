@@ -19,6 +19,7 @@ import {
   BAND_EDGES,
   BAND_END,
   BONUS_BOXES,
+  BONUS_TEXT_X,
   BOX_LABEL,
   BOX_MID,
   BOX_NUMBERS,
@@ -251,10 +252,12 @@ export default function Felt({
           <g key={b.id}>
             <Shape shape={SPOTS[b.id].shape} {...hit(b.id)} />
             <text className="t-bonus" x={b.x + b.w / 2} y={150} textAnchor="middle">{b.label}</text>
-            <text className="t-bonus-note" x={b.x + b.w / 2} y={166} textAnchor="middle">{b.note}</text>
+            {/* Set from the left, not centred, to leave the bottom right of
+                the box to the chip - see BONUS_TEXT_X in layout.js. */}
+            <text className="t-bonus-note" x={b.x + BONUS_TEXT_X} y={166}>{b.note}</text>
             {/* Printed from the table's own pay table, so the felt can never
                 advertise a price the engine will not pay. */}
-            <text className="t-bonus-pays" x={b.x + b.w / 2} y={189} textAnchor="middle">
+            <text className="t-bonus-pays" x={b.x + BONUS_TEXT_X} y={189}>
               {bonusPrice(b.id, bonus)}
             </text>
           </g>

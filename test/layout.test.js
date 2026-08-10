@@ -5,6 +5,7 @@ import { roll } from '../src/lib/rng.js'
 import {
   BONUS_BOXES,
   BOX_LABEL,
+  CHIP_R,
   BOX_MID,
   BOX_NUMBERS,
   FELT,
@@ -18,6 +19,7 @@ import {
   TRACKER_ROWS,
   bonusPrice,
   chipAt,
+  chipStyleAt,
 } from '../src/lib/layout.js'
 
 // The numbers each bonus bet is watching, so a completed set can be handed to
@@ -91,6 +93,77 @@ for (const id of BET_IDS) {
     seen.set(key, id)
   }
   eq('no two bets stack in the same place', collisions, 0)
+}
+
+/*
+ * ------------------------------------------------------------- chip sizes
+ *
+ * One size everywhere, which is the whole claim: a $25 chip is a $25 chip
+ * wherever it lands. That claim is only affordable if the tightest compartment
+ * on the felt can take it, so it is measured rather than asserted.
+ *
+ * The two things that go wrong when the size changes are a chip hanging over
+ * the edge of the box it is meant to be in, and two unrelated chips merging
+ * into one pile. Both were live when this went from per-group sizes to one -
+ * the bonus row hung through its bottom edge and the Seven hung into the
+ * hardway below it - so both are checked here.
+ */
+{
+  check('every bet draws the same size chip', BET_IDS.every((id) => chipStyleAt(id).r === CHIP_R), `r=${CHIP_R}`)
+
+  // How much room is left between the chip's rim and the edge of the shape it
+  // is drawn inside. Null for the spots with no closed shape of their own: the
+  // bands, the come box, and the bets with no printed spot at all.
+  const slackIn = (id) => {
+    const { shape } = SPOTS[id]
+    const [x, y] = chipAt(id)
+    const r = chipStyleAt(id).r
+    if (shape?.type === 'rect') {
+      return Math.min(x - shape.x, shape.x + shape.w - x, y - shape.y, shape.y + shape.h - y) - r
+    }
+    if (shape?.type === 'circle') return shape.r - Math.hypot(x - shape.cx, y - shape.cy) - r
+    return null
+  }
+  const inside = BET_IDS.map((id) => [id, slackIn(id)]).filter(([, s]) => s !== null)
+  const worst = inside.reduce((a, b) => (b[1] < a[1] ? b : a))
+  check('every chip fits inside its own printed spot', worst[1] >= 0, `${worst[0]} by ${worst[1]}`)
+
+  /*
+   * Chips that are allowed to touch are the ones a dealer heels together in
+   * one box: a flat bet and the odds behind it, a place and the buy over it.
+   * Everything else has to clear, or the felt stops saying which bet is which.
+   */
+  const heeledWith = (id) => {
+    const n = SPOTS[id].number
+    if (!n) return id
+    if (/^(place|buy)-/.test(id)) return `${n}:right`
+    if (/^come(-odds)?-/.test(id)) return `${n}:left`
+    if (/^(lay|dontcome)/.test(id)) return `${n}:strip`
+    return id
+  }
+  const placed = BET_IDS.filter((id) => chipAt(id)).map((id) => ({ id, at: chipAt(id), pile: heeledWith(id) }))
+  let merged = 0
+  let closest = { gap: Infinity }
+  for (let i = 0; i < placed.length; i++) {
+    for (let j = i + 1; j < placed.length; j++) {
+      const a = placed[i]
+      const b = placed[j]
+      if (a.pile === b.pile) continue
+      const gap = Math.hypot(a.at[0] - b.at[0], a.at[1] - b.at[1]) - 2 * CHIP_R
+      if (gap < closest.gap) closest = { gap, a: a.id, b: b.id }
+      if (gap < 0) merged++
+    }
+  }
+  eq('no two unrelated bets run into one pile', merged, 0)
+  check('the tightest pair on the felt still clears', closest.gap >= 0,
+    `${closest.a} / ${closest.b} by ${closest.gap.toFixed(1)}`)
+
+  // The puck goes on the number, between the lay and the don't come. It is the
+  // only other thing that lands in the strip, and it is bigger than a chip.
+  const puckGap = (id, n) => Math.hypot(chipAt(id)[0] - PUCK.on[n][0], chipAt(id)[1] - PUCK.on[n][1]) - PUCK.r - CHIP_R
+  const strip = BOX_NUMBERS.flatMap((n) => [`lay-${n}`, `dontcome-${n}`].map((id) => [id, puckGap(id, n)]))
+  const tightest = strip.reduce((a, b) => (b[1] < a[1] ? b : a))
+  check('the puck does not land on the chips beside it', tightest[1] >= 0, `${tightest[0]} by ${tightest[1]}`)
 }
 
 // ---------------------------------------------------------------- the box

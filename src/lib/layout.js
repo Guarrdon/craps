@@ -80,14 +80,21 @@ export const BOX_MID = Object.fromEntries(BOX_NUMBERS.map((n, i) => [n, cellMid(
 // ------------------------------------------------------------------- spots
 
 /*
- * How big a chip is where.
+ * How big a chip is.
  *
- * The centre of the table is a dense grid of small compartments - seventeen
- * hop circles across four hundred pixels - and a chip sized for the pass line
- * would cover its neighbours. The size is part of the spot rather than
- * something the interface decides, because it depends on the geometry here.
+ * One size, everywhere. A casino does not stock a smaller chip for the hop
+ * grid, and a felt that draws one is telling the player something untrue about
+ * the bet: a $25 chip on the Little Ones is the same $25 chip as the one on
+ * the pass line, and it should be the same object on the cloth.
+ *
+ * This was per-group, sized down for the dense compartments in the centre, and
+ * the centre is what sets the ceiling: the hop circles are 38 across and 46
+ * apart, so 17 fills a circle with 2 to spare and leaves 12 between
+ * neighbours. Anything larger stops being a chip in a circle and starts being
+ * a chip over one. The other compartments were measured against the same
+ * number and the bonus row was the only one that had to move for it.
  */
-const CHIP_R = { line: 17, odds: 17, field: 17, box: 13, bonus: 12, centre: 12, hardway: 12, hop: 11 }
+export const CHIP_R = 17
 
 /*
  * Whether a stack gets its total written beside it.
@@ -265,8 +272,23 @@ export const BONUS_BOXES = [
 
 export const bonusPrice = (id, paytable = '30') => `${BONUS_PAYTABLES[paytable].pays[id]} to 1`
 
+/*
+ * Where the chip goes, and why the print moves out of its way.
+ *
+ * The box is 130 by 70 and three lines of type already fill it. A full-sized
+ * chip in the middle of it landed square on the price and left "30 to 1"
+ * reading as "3 (chip) 1", which looks like a drawing mistake rather than a
+ * chip on top of a word. So the chip takes the bottom right corner - the same
+ * corner it takes in every hardway compartment - and the two lower lines are
+ * set from the left instead of centred, which is what keeps them clear of it.
+ * The title stays centred: it is nearly the full width of the box, it has
+ * nowhere to go, and the chip does not reach it.
+ */
+export const BONUS_TEXT_X = 12 // inset from the box's left edge for note and price
+const BONUS_CHIP = { dx: 24, y: 176 } // inset from the right edge, and how low
+
 for (const t of BONUS_BOXES) {
-  spot(t.id, { type: 'rect', x: t.x, y: 128, w: t.w, h: 70, rx: 4 }, [t.x + t.w / 2, 182], {
+  spot(t.id, { type: 'rect', x: t.x, y: 128, w: t.w, h: 70, rx: 4 }, [t.x + t.w - BONUS_CHIP.dx, BONUS_CHIP.y], {
     label: t.label,
     note: t.note,
     pays: t.pays,
@@ -308,7 +330,10 @@ export const HOP_LEGEND = { x: HOP_X0 + HOP_STEP * 4.5, y: HOP_Y0 }
 export const PROP_ROOF = `M ${C.left} 395 L ${C.left} 372 L 1140 332 L 1390 332 L ${C.right} 372 L ${C.right} 395 Z`
 export const PROP_BODY = { x: C.left, y: 395, w: C.right - C.left, h: 380 }
 
-spot('any7', { type: 'path', d: PROP_ROOF }, [cx, 381], { label: 'SEVEN', pays: '4 TO 1' })
+// The roof runs from 332 to 395 and the chip has to sit inside it, so 376 is
+// as low as it goes - at 381 a full-sized chip hung through the bottom edge
+// into the hardway compartment below.
+spot('any7', { type: 'path', d: PROP_ROOF }, [cx, 376], { label: 'SEVEN', pays: '4 TO 1' })
 
 // The hardways, arranged as the reference arranges them: the two nines to the
 // left, the two sevens to the right.
@@ -393,7 +418,7 @@ export const chipAt = (id) => spots[id]?.chip ?? null
 // How a chip stack should be drawn at this spot: how big, whether its total is
 // written out, and which side of the pile that total goes.
 export const chipStyleAt = (id) => ({
-  r: CHIP_R[BETS[id]?.group] ?? 13,
+  r: CHIP_R,
   total: LABELLED.has(BETS[id]?.group),
   // Bets stacked in the upper half of a number box - odds heeled on a come
   // bet, a buy sitting over a place - label upwards, so the total does not
