@@ -1,5 +1,5 @@
-import { check, done, eq } from './harness.js'
-import { DEFAULT_TABLE, check as legal, maxBet, maxOdds, rangeFor, unitFor, vigFor } from '../src/lib/limits.js'
+import { check, done, eq, near } from './harness.js'
+import { DEFAULT_TABLE, check as legal, maxBet, maxOdds, rangeFor, unitFor, vigEdge, vigFor } from '../src/lib/limits.js'
 import { POINTS } from '../src/lib/bets.js'
 
 const table = DEFAULT_TABLE // $25 line, 3-4-5x
@@ -88,6 +88,17 @@ eq('laying $40 against the four costs a dollar', vigFor('lay-4', 40, { table }),
 eq('laying $100 against the four costs two', vigFor('lay-4', 100, { table }), 2)
 eq('laying $120 against the six costs five', vigFor('lay-6', 120, { table }), 5)
 eq('a place bet costs nothing', vigFor('place-6', 30, { table }), 0)
+
+// What the commission actually costs at a given size. Exactly the published
+// figure only when 5% comes out in whole dollars.
+near('a $100 buy costs exactly 5 in 105', vigEdge('buy-4', 100, { table }), (5 / 105) * 100)
+near('a $39 buy costs a dollar in forty', vigEdge('buy-4', 39, { table }), 2.5)
+near('a $10 buy costs a dollar in eleven', vigEdge('buy-4', 10, { table }), (1 / 11) * 100)
+near('laying $40 on the four costs a dollar in forty one', vigEdge('lay-4', 40, { table }), (1 / 41) * 100)
+
+// A come bet on its number is the dealer's to move, not the player's to bet.
+check('nothing goes directly on a come bet on its number', !legal('come-6', 10, ctx({ phase: 'point', point: 5, bets: { 'come-6': { amount: 10 } } })).ok)
+check("or a don't come on its number", !legal('dontcome-4', 10, ctx({ phase: 'point', point: 5, bets: { 'dontcome-4': { amount: 10 } } })).ok)
 eq('the pass line costs nothing', vigFor('pass', 10, { table }), 0)
 
 check('the vig comes out of the rail too', !legal('buy-4', 100, ctx({ bankroll: 100 })).ok)

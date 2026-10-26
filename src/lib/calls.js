@@ -75,7 +75,12 @@ export function ledgerFor(events) {
   const back = events.filter((e) => e.kind === 'push' || e.kind === 'return')
 
   const lines = []
-  for (const e of won) lines.push({ tone: 'win', text: `${betDef(e.id).label} pays ${money(e.pay)}` })
+  for (const e of won) {
+    // A buy or lay that stays up pays its next commission out of the win, and
+    // the line says so rather than paying a number that looks short.
+    const vig = e.vig ? `, less ${money(e.vig)} vig` : ''
+    lines.push({ tone: 'win', text: `${betDef(e.id).label} pays ${money(e.pay)}${vig}` })
+  }
   for (const e of back) {
     lines.push({
       tone: 'back',

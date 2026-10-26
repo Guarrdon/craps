@@ -74,13 +74,19 @@ Most of the work is in the things a table says no to.
 - **Working and off.** Place bets, buys, hardways and come odds are off on a
   come-out unless you call them on. Which is what makes a come-out seven
   survivable: your come bet on the six loses, but its odds were never at risk
-  and come back.
+  and come back. Lay odds on a don't come bet work, as they do at most houses —
+  the seven is what they are waiting for.
 - **Contract bets.** The pass line and a come bet on a number cannot be taken
   down once they have a number. A line bet *can* be picked up before the
   come-out throw, because until there is a point it is only chips on the felt.
+  Nor can anything be added to a come bet once the dealer has moved it to its
+  number — the only way onto the number is through the come box. Odds go
+  behind it; nothing else does.
 - **Vigorish.** 5% on a buy, charged on the stake; 5% on a lay, charged on the
   win. A dollar minimum either way, rounded down — which is most of why a small
-  buy is a bad bet.
+  buy is a bad bet. A commission pays for one decision: up front when the bet
+  goes up, and out of every win that leaves it standing — *"pay the buy, take
+  the vig"*. Taken down before it is decided, the commission comes back.
 - **The line rides.** When the point is made the dealer pays your pass line by
   setting an equal stack beside it. You pick up the payout; the original is
   still there as your bet for the next come-out. Almost nobody picks it up.
@@ -89,6 +95,10 @@ Most of the work is in the things a table says no to.
   back the rest — the six pays $35, press it to $60, five back. Every bet
   remembers what you last deliberately set it to, so *"back to thirty"* still
   means thirty three presses later.
+- **Hands off while the dice are out.** The roll is drawn, and saved, before
+  the dice leave the hand. From then until the crew has finished paying it
+  nothing on the felt can be made, moved or taken down, and closing the tab
+  does not take it back — the roll is settled when you return.
 - **The settlement order.** When a number hits, the felt pays in the order the
   crew works: the centre first, then the box, then the come, then the line. It
   is not cosmetic — a come bet moving onto the six has to happen *after* the six
@@ -103,6 +113,10 @@ comes down, but the markers stay lit — Big and Boom are still running on the
 same numbers. Which also means Little cannot go up again in that hand: every
 number it wants is already marked, so it would be a certainty rather than a bet.
 A seven wipes the board and the next shooter can win it again.
+
+Once the first throw has been made the bets are contracts: they cannot come
+down, and they are paid at the rate they were bet at, whatever the table is
+changed to in the meantime.
 
 The price is the one thing on this felt that genuinely differs house to house,
 so it is a setting: **30 to 1, 31 to 1, or 34 to 1**. A house printing *31 for
@@ -140,7 +154,10 @@ throws, looks, twists and throws again — 1.97 passes on average.
 The guarantee does not rest on the arithmetic being perfect. It rests on the
 result being read from the throw that gets played back, never asserted over it:
 **what you watch land is what you get paid for, always.** The test suite says so
-ten thousand throws at a time.
+ten thousand throws at a time. A throw that would not converge — never yet seen,
+in 180,000 of them — is not thrown again: that would make the hard-to-land
+results rarer than one in thirty six. The dice are turned to the drawn faces as
+they come to rest instead.
 
 Three things the physics needed, none of which were obvious until measured:
 contacts sorted by where they are in the world rather than by corner index (a
@@ -227,7 +244,7 @@ The rules live apart from the interface, so they can be tested directly:
 npm test
 ```
 
-**1,580 assertions** across eleven files. Two are worth knowing about.
+**1,656 assertions** across eleven files. Two are worth knowing about.
 
 **Money is conserved.** Across thirty thousand randomised rolls, what the player
 holds — the rail plus everything still on the felt — moves by exactly the
@@ -243,6 +260,13 @@ principles rather than quoted, which comes to 244 in 495. And the last check is
 the one the file exists for: **nothing on this felt has a negative edge.** Odds
 are the only free bet in the building, every odds bet is free, and nothing else
 is.
+
+Buys and lays are checked through the engine itself as well, left up for life
+the way nearly everybody plays them: value iteration over every table state the
+bet can be in, across all thirty six throws, until the expectation converges.
+Each lands on its published figure — which is how it came to light that the
+commission used to be charged only once, and a $100 buy on the four left up was
+costing 3.23% rather than 4.76%.
 
 ### The browser harnesses
 

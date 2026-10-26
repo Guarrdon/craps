@@ -141,14 +141,20 @@ const ids = (events, kind) => events.filter((e) => e.kind === kind).map((e) => e
 {
   const start = at({ phase: 'point', point: 5, bets: bet({ 'buy-4': 100, 'lay-10': 100 }) })
   const { state } = resolveRoll(start, roll(2, 2))
-  eq('a bought four pays true odds', state.bankroll, 200)
+  // $200 at true odds, less the $5 that pays for its next decision - it is
+  // still up, and a commission buys one decision at a time.
+  eq('a bought four pays true odds, less the vig to keep it up', state.bankroll, 195)
+  eq('and that vig is now on the bet, for the next decision', state.bets['buy-4'].vig, 5)
   check('and the lay against the ten rides', state.bets['lay-10'].amount === 100)
 }
 
 {
   const start = at({ phase: 'point', point: 5, bets: bet({ 'lay-4': 100 }) })
   const { state } = resolveRoll(start, roll(3, 4))
-  eq('a lay against the four wins half of it on the seven', state.bankroll, 50)
+  // Half of it is $50, and the lay stays up, so the next commission - 5% of
+  // the $50 it would win, rounded down - comes out of this one.
+  eq('a lay against the four wins half of it on the seven, less the next vig', state.bankroll, 48)
+  check('and stays up', state.bets['lay-4'].amount === 100)
 }
 
 // ------------------------------------------------------------- hardways

@@ -132,6 +132,21 @@ export function vigFor(id, amount, { table = DEFAULT_TABLE } = {}) {
   return Math.max(table.vigMin, Math.floor(base * table.vigRate))
 }
 
+/*
+ * What a buy or lay actually costs at this size, per decision.
+ *
+ * The published 4.762% assumes the commission is exactly five per cent, which
+ * it only is when the arithmetic comes out in whole dollars - a $100 buy, a
+ * lay that wins $20. The dollar floor and the rounding down move it either
+ * way: a $10 buy pays a dollar, which is 9.1%, and a $39 buy pays the same
+ * dollar, which is 2.5%. The bet pays true odds, so the commission is the
+ * whole of the edge and this is exact.
+ */
+export function vigEdge(id, amount, { table = DEFAULT_TABLE } = {}) {
+  const vig = vigFor(id, amount, { table })
+  return amount > 0 ? (vig / (amount + vig)) * 100 : 0
+}
+
 // ------------------------------------------------------------------- ranges
 
 // Which minimum and maximum a spot answers to. The centre and the bonus row
@@ -174,10 +189,26 @@ export function check(id, amount, ctx = {}) {
     bets = {},
     marked = new Set(),
     bankroll = Infinity,
+    pending = null,
   } = ctx
   const d = BETS[id]
   if (!d) return no(`There is no ${id} on this layout.`)
+  if (pending) return no('The dice are out. Hands off the layout until this roll is paid.')
   if (!isMoney(amount)) return no('Bets are in whole dollars.')
+
+  /*
+   * A come bet on a number is put there by the dealer, never by the player.
+   *
+   * It arrives from the come box having already survived its come-out, and
+   * that is the only way onto the number. Adding flat money to one directly
+   * is a different bet: on the do side it is a put bet, which costs up to a
+   * third of the stake, and on the don't side it is an even-money bet that
+   * the seven beats the number - which on the four the player wins two times
+   * in three. Odds go behind it; nothing else does.
+   */
+  if (/^(come|dontcome)-\d+$/.test(id)) {
+    return no(`The dealer moves come bets onto the ${d.number}. Bet the ${id.startsWith('dont') ? "Don't Come" : 'Come'} box, or take odds behind it.`)
+  }
 
   // --- when the spot is open at all
 

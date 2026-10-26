@@ -26,7 +26,7 @@ import {
   savePrefs,
   saveStats,
 } from './lib/storage.js'
-import { backEverything, baseOf, newTable, placeMany, pressAmount, reducer } from './lib/table.js'
+import { DICE_ARE_OUT, backEverything, baseOf, newTable, placeMany, pressAmount, reducer } from './lib/table.js'
 import './styles.css'
 
 // Set by scripts/probe.mjs with ?probe on the URL. Dev builds only - the flag
@@ -77,9 +77,28 @@ export default function App() {
       bets: state.bets,
       marked: state.marked,
       bankroll: state.bankroll,
+      pending: state.pending,
     }),
     [state],
   )
+
+  /*
+   * Hands off the layout while the dice are out.
+   *
+   * From the moment a roll is drawn until the crew has finished paying it,
+   * nothing on the felt may change. The reducer refuses it regardless - the
+   * roll is on the table as `pending` - and this is only so that the player
+   * is told why, rather than seeing a bet appear to go down and then not.
+   * A ref, so every handler reads the moment it is called rather than the
+   * render it was made in.
+   */
+  const busy = useRef(false)
+  busy.current = !!throwing || !!settling || !!state.pending
+  const handsOff = useCallback(() => {
+    if (!busy.current) return false
+    setSay({ kind: 'refused', text: DICE_ARE_OUT })
+    return true
+  }, [])
 
   useEffect(() => {
     sound.setMuted(!!prefs.muted)
@@ -109,6 +128,7 @@ export default function App() {
        * pay 7:6 on five dollars - so it becomes $12 and the readout says so,
        * which is what a dealer says while doing exactly this.
        */
+      if (handsOff()) return false
       const { add, total, bumped } = toLegal(id, want, ctx)
       const verdict = check(id, add, ctx)
       if (!verdict.ok) {
@@ -151,6 +171,7 @@ export default function App() {
   )
 
   const onOdds = useCallback(() => {
+    if (handsOff()) return
     // The rule lives in table.js. Running it here as well is only to find out
     // what to say about it - the reducer is deterministic, so the two agree.
     const { backed } = backEverything(state)
@@ -165,6 +186,7 @@ export default function App() {
 
   const onWorking = useCallback(
     (on, only) => {
+      if (handsOff()) return
       const ids = only ? [only] : Object.keys(state.bets).filter((id) => betDef(id).togglable)
       if (!ids.length) return
       for (const id of ids) dispatch({ type: 'working', id, on })
@@ -181,6 +203,7 @@ export default function App() {
   )
 
   const onTakeDown = useCallback((id) => {
+    if (handsOff()) return
     dispatch({ type: 'takedown', id })
     setSay({ kind: 'bet', text: `${betDef(id).label} down.` })
   }, [])
@@ -188,6 +211,7 @@ export default function App() {
   // Back to what it started at, with the presses handed back.
   const onRegress = useCallback(
     (id) => {
+      if (handsOff()) return
       const bet = state.bets[id]
       if (!bet) return
       const base = baseOf(bet)
@@ -206,6 +230,7 @@ export default function App() {
 
   // The bonus row survives this on purpose - see sweep() in table.js.
   const onClearAll = useCallback(() => {
+    if (handsOff()) return
     const bonus = Object.keys(state.bets).some((id) => betDef(id).group === 'bonus')
     dispatch({ type: 'sweep' })
     setSay({
@@ -219,7 +244,7 @@ export default function App() {
   // --- throwing
 
   const onRoll = useCallback(() => {
-    if (throwing || settling) return
+    if (throwing || settling || state.pending) return
     // The shooter has to have a line bet. It is the one rule about who may
     // throw, and it is why the come-out is the only time the line is open.
     if (state.phase === 'come-out' && !state.bets.pass && !state.bets.dontpass) {
@@ -235,6 +260,9 @@ export default function App() {
     const roll = rng.current.roll()
     const shape = makeRng(rng.current.int(2 ** 30))
     const thrown = throwDice(shape, [roll.a, roll.b])
+    // On the table, and saved, before anything is shown. From here the roll
+    // cannot be taken back, and the felt is closed until it has been paid.
+    dispatch({ type: 'throw', roll })
 
     sound.dice()
     setSay({ kind: 'throw', text: 'Dice are out.' })
@@ -256,7 +284,7 @@ export default function App() {
     const { roll } = throwing
     // Resolved here as well as in the reducer, to find out what to say about
     // it. The reducer is pure, so the two cannot disagree.
-    const next = reducer(state, { type: 'roll', roll })
+    const next = reducer(state, { type: 'settle' })
     const events = next.lastEvents ?? []
     setSay({ kind: 'call', text: callFor(roll, events) })
     setResting(throwing.resting)
@@ -269,7 +297,7 @@ export default function App() {
   useEffect(() => {
     if (!settling) return undefined
     const timer = setTimeout(() => {
-      dispatch({ type: 'roll', roll: settling.roll })
+      dispatch({ type: 'settle' })
       setStats((s) => recordRoll(s, settling.roll, settling.events, settling.rail))
       setLedger({ roll: settling.roll, ...ledgerFor(settling.events) })
       // Paid once the crew has finished working it, which is when the chips
@@ -306,10 +334,34 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [settling, prefs.lineRides])
 
+  /*
+   * A roll that was drawn before the page went away.
+   *
+   * Closing the tab while the dice are in the air does not take the throw
+   * back - it was on the table from the moment it was drawn. Coming back in,
+   * it is settled straight away, with no throw to watch, and the call says
+   * what it was.
+   */
+  const recovered = useRef(null)
+  useEffect(() => {
+    if (!state.pending || throwing || settling) return
+    // Once per roll, even if the effect runs twice on mount.
+    if (recovered.current === state.pending) return
+    recovered.current = state.pending
+    const roll = state.pending
+    const next = reducer(state, { type: 'settle' })
+    const events = next.lastEvents ?? []
+    dispatch({ type: 'settle' })
+    setStats((s) => recordRoll(s, roll, events, next.bankroll))
+    setLedger({ roll, ...ledgerFor(events) })
+    setSay({ kind: 'call', text: callFor(roll, events) })
+  }, [state, throwing, settling])
+
   // --- pressing
 
   const onPress = useCallback(
     (only) => {
+      if (handsOff()) return
       const wins = only ? pressable.filter((p) => p.id === only) : pressable
       const done = []
       for (const { id, pay } of wins) {
@@ -345,6 +397,7 @@ export default function App() {
   // --- the opening
 
   const onOpening = useCallback(() => {
+    if (handsOff()) return
     if (!prefs.opening?.length) {
       setSay({ kind: 'refused', text: 'No opening saved. Set the felt how you like it and press Save.' })
       return
@@ -390,6 +443,7 @@ export default function App() {
   // --- the table itself
 
   const onNewSession = useCallback(() => {
+    if (handsOff()) return
     dispatch({ type: 'buyin', amount: OPENING_RAIL })
     clearGame()
     setLedger(null)
@@ -569,7 +623,9 @@ export default function App() {
       {open === 'table' && (
         <SettingsDialog
           table={state.table}
-          onChange={(t) => dispatch({ type: 'configure', table: t })}
+          onChange={(t) => {
+            if (!handsOff()) dispatch({ type: 'configure', table: t })
+          }}
           prefs={prefs}
           onPrefs={setPref}
           onNewSession={onNewSession}

@@ -1,9 +1,10 @@
 import { check, done, eq, near } from './harness.js'
-import { baseOf, newTable, placeBet, pressAmount, railTotal, reducer, regress, setWorking, sweepable, takeDown } from '../src/lib/table.js'
+import { baseOf, canTakeDown, newTable, placeBet, pressAmount, railTotal, reducer, regress, setWorking, sweepable, takeDown } from '../src/lib/table.js'
 import { atRisk } from '../src/lib/rules.js'
 import { makeRng, roll } from '../src/lib/rng.js'
 import { BET_IDS, betDef } from '../src/lib/bets.js'
-import { maxBet, vigFor } from '../src/lib/limits.js'
+import { check as legal, maxBet, vigFor } from '../src/lib/limits.js'
+import { packTable, unpackTable } from '../src/lib/storage.js'
 
 /*
  * A $10 table, so the arithmetic in these checks stays legible.
@@ -102,7 +103,8 @@ const start = (over = {}) => {
   let s = start({ phase: 'point', point: 6 })
   s = placeBet(s, 'buy-4', 100)
   s = takeDown(s, 'buy-4')
-  eq('taking a buy down does not refund the commission', s.bankroll, 4995)
+  // The commission paid for a decision, and none has happened.
+  eq('taking a buy down undecided refunds the commission', s.bankroll, 5000)
 }
 
 /*
@@ -133,10 +135,19 @@ const start = (over = {}) => {
   eq('the sweep knows when there is nothing to sweep', sweepable(after).length, 0)
   check('and running it again changes nothing', reducer(after, { type: 'sweep' }).bets === after.bets)
 
-  // The × on the bet itself still comes down - that is a decision, not a tidy-up.
+  // Once the shooter is under way the bonus row is a contract. Letting it come
+  // down would let a player keep the runs going well and drop the rest.
   const gone = takeDown(after, 'little')
-  check('but taking the bonus bet down by hand still works', !gone.bets.little)
-  check('and it cannot go back up on a board already under way', !!placeBet(gone, 'little', 10).refused)
+  check('the bonus bet will not come down once the dice have moved', !!gone.refused && gone.bets.little?.amount === 10)
+  check('and the × knows it', !canTakeDown(after, 'little'))
+}
+
+{
+  // Before the first throw it is only chips on the felt.
+  let s = placeBet(start(), 'little', 10)
+  check('the bonus bet comes down before the first throw', canTakeDown(s, 'little'))
+  s = takeDown(s, 'little')
+  check('and goes back on the rail', !s.bets.little && s.bankroll === 5000)
 }
 
 /*
@@ -314,6 +325,134 @@ const start = (over = {}) => {
   // ending on the wrong roll.
   near('a shooter lasts about eight and a half throws', 20000 / handovers, 8.53, 0.5)
   check('the longest hand is remembered', longestSeen >= 20)
+}
+
+/*
+ * ------------------------------------------------------- the dice are out
+ *
+ * From the moment a roll is drawn it is on the table as pending, and nothing
+ * on the felt may change until it has been paid. Otherwise a player who has
+ * seen the number called can pull the bets it beats and pile onto the ones it
+ * pays - which is a game the house loses every time.
+ */
+{
+  let s = placeBet(start(), 'pass', 10)
+  s = placeBet(s, 'field', 10)
+  s = reducer(s, { type: 'throw', roll: roll(3, 4) })
+  check('a thrown roll is on the table before it is paid', s.pending?.total === 7)
+
+  for (const action of [
+    { type: 'bet', id: 'field', amount: 10 },
+    { type: 'takedown', id: 'field' },
+    { type: 'sweep' },
+    { type: 'working', id: 'field', on: false },
+    { type: 'odds' },
+    { type: 'many', list: [{ id: 'any7', amount: 5 }] },
+    { type: 'regress', id: 'field' },
+    { type: 'configure', table: { bonus: '34' } },
+    { type: 'buyin', amount: 5000 },
+  ]) {
+    const after = reducer(s, action)
+    check(`'${action.type}' is refused while the dice are out`, !!after.refused && after.bets === s.bets && after.bankroll === s.bankroll && after.table === s.table)
+  }
+  check('and the check itself says no', !legal('any7', 5, { phase: s.phase, point: s.point, bets: s.bets, pending: s.pending }).ok)
+
+  // The roll that is paid is the one that was drawn, whatever is asked for.
+  const paid = reducer(s, { type: 'roll', roll: roll(5, 6) })
+  eq('the pending roll is the one that settles', paid.lastRoll.total, 7)
+  check('and the field loses to it', !paid.bets.field)
+  eq('the felt opens again once it is paid', paid.pending, null)
+  check('bets are taken again after that', !placeBet(paid, 'pass', 10).refused)
+}
+
+{
+  // Saved with the game, so closing the tab cannot take a roll back.
+  let s = reducer(placeBet(start(), 'pass', 10), { type: 'throw', roll: roll(1, 1) })
+  const back = unpackTable(JSON.parse(JSON.stringify(packTable(s))))
+  eq('a pending roll survives a save and a reload', back.pending?.total, 2)
+  const paid = reducer(back, { type: 'roll' })
+  check('and is paid when the table comes back', !paid.bets.pass && paid.lastRoll.total === 2)
+}
+
+{
+  // Settling pays the thrown roll once. Asking again is a no-op, not a repeat.
+  let s = reducer(placeBet(start(), 'field', 10), { type: 'throw', roll: roll(1, 2) })
+  const once = reducer(s, { type: 'settle' })
+  const twice = reducer(once, { type: 'settle' })
+  check('a second settle changes nothing', twice === once)
+  eq('and the roll is in the history once', twice.history.length, 1)
+}
+
+/*
+ * ---------------------------------------------- come bets on their numbers
+ *
+ * Only the dealer puts money there, by moving it from the come box. A flat bet
+ * added directly is a put bet on the do side and, on the don't side, an
+ * even-money bet that the seven beats the number - two in three on the four.
+ */
+{
+  const s = start({ phase: 'point', point: 5, bets: { 'dontcome-4': { amount: 10 }, 'come-4': { amount: 10 } } })
+  for (const id of ['dontcome-4', 'come-4', 'dontcome-6', 'come-10']) {
+    const after = placeBet(s, id, 10)
+    check(`nothing can be added directly to ${betDef(id).label}`, !!after.refused && after.bets[id]?.amount === s.bets[id]?.amount)
+  }
+  check('odds still go behind it', !placeBet(s, 'dontcome-odds-4', 20).refused)
+}
+
+/*
+ * ----------------------------------------------------- one vig, one decision
+ *
+ * The commission is paid for each decision. Up front for the first, and out of
+ * each win that leaves the bet standing for the next - and a bet that comes
+ * down undecided gets back the one it prepaid.
+ */
+{
+  let s = start({ phase: 'point', point: 5 })
+  s = placeBet(s, 'buy-4', 100)
+  eq('a $100 buy pays $5 to go up', s.bankroll, 4895)
+  s = reducer(s, { type: 'roll', roll: roll(2, 2) })
+  const pay = s.lastEvents.find((e) => e.id === 'buy-4')
+  eq('a win that stays up pays $200 less the next $5', pay.pay, 195)
+  eq('and says what it took', pay.vig, 5)
+  eq('the rail has the win, net', s.bankroll, 5090)
+  s = reducer(s, { type: 'roll', roll: roll(2, 2) })
+  eq('and the next win is charged the same', s.bankroll, 5285)
+  s = takeDown(s, 'buy-4')
+  eq('coming down undecided returns the stake and the prepaid vig', s.bankroll, 5390)
+}
+
+{
+  let s = start({ phase: 'point', point: 5 })
+  s = placeBet(s, 'lay-4', 40)
+  eq('laying $40 on the four costs a dollar', s.bankroll, 4959)
+  s = reducer(s, { type: 'roll', roll: roll(3, 4) })
+  eq('the seven wins $20, less the dollar for the next decision', s.lastEvents.find((e) => e.id === 'lay-4').pay, 19)
+  s = reducer(s, { type: 'roll', roll: roll(2, 2) })
+  // $5,000, less the first dollar, plus the $19, less the $40 the four takes.
+  eq('and a four takes it, with nothing left owing', railTotal(s), 5000 - 1 + 19 - 40)
+}
+
+{
+  // Pressed, then regressed: the commission follows the bet's size.
+  let s = start({ phase: 'point', point: 5 })
+  s = placeBet(s, 'buy-4', 40) // $2
+  s = placeBet(s, 'buy-4', 60, { keepBase: true }) // $100 now, $3 more
+  eq('pressing a buy pays the extra vig', s.bets['buy-4'].vig, 5)
+  const before = s.bankroll
+  s = regress(s, 'buy-4')
+  eq('regressing it hands back the stake and the vig it no longer owes', s.bankroll, before + 60 + 3)
+  eq('and the bet carries the vig for its own size', s.bets['buy-4'].vig, vigFor('buy-4', 40, { table: s.table }))
+}
+
+/*
+ * ------------------------------------------------- the bonus keeps its price
+ */
+{
+  let s = placeBet(start(), 'all', 5)
+  s = reducer(s, { type: 'configure', table: { bonus: '34' } })
+  s = { ...s, marked: new Set([2, 3, 4, 5, 6, 8, 9, 10, 11]) }
+  s = reducer(s, { type: 'roll', roll: roll(6, 6) })
+  eq('Boom or Bust bet at 150 to 1 is paid at 150, whatever the table says now', s.lastEvents.find((e) => e.id === 'all').pay, 750)
 }
 
 done('session')

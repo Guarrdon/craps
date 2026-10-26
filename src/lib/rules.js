@@ -15,7 +15,7 @@
  */
 
 import { BETS, POINTS, betDef, isWorking, settle } from './bets.js'
-import { DEFAULT_TABLE } from './limits.js'
+import { DEFAULT_TABLE, vigFor } from './limits.js'
 
 // The crew's order of work. Everything in a group settles before the next
 // group is looked at.
@@ -91,7 +91,9 @@ export function resolveRoll(prev, roll) {
         continue
       }
 
-      const result = settle(id, bet.amount, roll, ctx)
+      // A bonus bet is paid at the rate it was made at. Changing the table's
+      // pay table mid-shooter changes what the next bet gets, not this one.
+      const result = settle(id, bet.amount, roll, bet.paytable ? { ...ctx, bonus: bet.paytable } : ctx)
       if (!result) continue // rides
 
       settled.add(id)
@@ -192,15 +194,29 @@ function applyResult(state, events, id, bet, result) {
     return
   }
 
+  /*
+   * A commission buys one decision, not a bet for life.
+   *
+   * The vig on a buy or a lay was paid when it went up, and it paid for this
+   * decision. A win that stays up is a new decision, and the dealer takes the
+   * next commission out of the payout before pushing it across - "pay the
+   * buy, take the vig". Without this a $100 buy on the four would pay $5 once
+   * and then win at true odds for free for as long as the four kept coming,
+   * which takes the edge from 4.76% down to 3.23%.
+   */
+  const commission = !down && betDef(id).vig ? vigFor(id, bet.amount, { table: state.table }) : 0
+  const net = pay - commission
+  if (commission) state.bets[id] = { ...bet, vig: commission }
+
   // Won. `down` decides whether the stake comes back with the winnings or
   // stays out for the next roll: a pass line bet is finished, a place bet is
   // not.
-  state.bankroll += pay
+  state.bankroll += net
   if (down) {
     state.bankroll += bet.amount
     delete state.bets[id]
   }
-  events.push({ kind: 'pay', id, amount: bet.amount, pay, down })
+  events.push({ kind: 'pay', id, amount: bet.amount, pay: net, down, ...(commission ? { vig: commission } : {}) })
 }
 
 // --------------------------------------------------------------- the ledger

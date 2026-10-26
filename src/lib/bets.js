@@ -187,7 +187,11 @@ for (const n of POINTS) {
     behind: `dontcome-${n}`,
     number: n,
     unit: unitFor(layPay),
-    worksOnComeOut: false,
+    // Working on the come-out, which is what most houses do with lay odds:
+    // the don't come bet underneath is working too, and a come-out seven is
+    // the roll it is waiting for. Free of edge either way, and can be called
+    // off like any other odds.
+    worksOnComeOut: true,
     togglable: true,
     settle: (r) => (r.total === 7 ? win(ratio(r.amount, layPay)) : r.total === n ? lose() : RIDES),
   })

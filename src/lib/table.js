@@ -17,8 +17,27 @@ import { newTable, resolveRoll } from './rules.js'
 
 export { newTable }
 
+/*
+ * Nothing on the felt moves while the dice are out.
+ *
+ * The roll is drawn before the dice leave the hand, and from that moment it is
+ * on the table as `pending` - saved with everything else, so closing the tab
+ * cannot take it back. Until it has been paid, every way of changing a bet is
+ * refused: at a real table the dealers have their hands off the layout from the
+ * moment the stick sends the dice, and a bet that could be pulled after the
+ * number is called is a bet that never loses.
+ */
+const WHILE_THE_DICE_ARE_OUT = new Set(['roll', 'settle', 'clear'])
+
 export function reducer(state, action) {
+  if (state.pending && !WHILE_THE_DICE_ARE_OUT.has(action.type)) {
+    return refuse(state, DICE_ARE_OUT)
+  }
   switch (action.type) {
+    case 'throw':
+      // The result, drawn and committed. It is settled by the 'roll' that
+      // follows once the dice have been seen to land.
+      return { ...state, pending: action.roll, refused: null }
     case 'bet':
       return placeBet(state, action.id, action.amount, { keepBase: action.press })
     case 'takedown':
@@ -41,7 +60,13 @@ export function reducer(state, action) {
     case 'buyin':
       return { ...newTable({ table: state.table }), bankroll: action.amount }
     case 'roll':
-      return applyRoll(state, action.roll)
+      // If a throw is pending, that is the roll - whatever the caller says.
+      return applyRoll(state, state.pending ?? action.roll)
+    case 'settle':
+      // Pay the roll that was thrown, and only that one. Once it has been
+      // paid there is nothing pending, so asking again - a double-run effect,
+      // a timer that fires late - is a no-op rather than the same roll twice.
+      return state.pending ? applyRoll(state, state.pending) : state
     case 'clear':
       return clearRefusal(state)
     default:
@@ -56,7 +81,10 @@ const ctxFor = (state) => ({
   bets: state.bets,
   marked: state.marked,
   bankroll: state.bankroll,
+  pending: state.pending,
 })
+
+export const DICE_ARE_OUT = 'The dice are out. Hands off the layout until this roll is paid.'
 
 const refuse = (state, reason) => ({ ...state, refused: { reason, at: state.shooter.rolls } })
 const clearRefusal = (state) => (state.refused ? { ...state, refused: null } : state)
@@ -88,6 +116,9 @@ export function placeBet(state, id, amount, { keepBase = false } = {}) {
       // houses do it - the alternative, charging on a win, is a better deal
       // for the player and rarer than the internet suggests.
       vig: (standing?.vig ?? 0) + verdict.vig,
+      // The bonus row remembers the pay table it was bet at, so the price
+      // cannot change under a bet that is already riding.
+      ...(betDef(id).group === 'bonus' ? { paytable: state.table?.bonus ?? '30' } : {}),
     },
   }
 
@@ -114,6 +145,18 @@ export function placeBet(state, id, amount, { keepBase = false } = {}) {
  */
 export function canTakeDown(state, id) {
   const d = betDef(id)
+
+  /*
+   * The bonus row is a contract from its first throw.
+   *
+   * Before the dice have moved it is only chips on the felt. After that it is
+   * a bet on the rest of this shooter's hand, and letting it come down would
+   * let a player keep the runs that are going well and walk away from the ones
+   * that are not - which takes Boom or Bust from 20.6% to under 12%. Every
+   * throw that is not a seven marks a number, so an empty tracker is exactly
+   * "nothing has been thrown since it went up".
+   */
+  if (d.group === 'bonus') return state.marked.size === 0
 
   // A line bet is only a contract once it has a number to be decided against.
   // Before the come-out throw it is just chips on the felt and may be picked
@@ -146,8 +189,17 @@ export function takeDown(state, id) {
     }
   }
 
-  // The vig on a buy or lay is not refunded. It bought the better price and
-  // the price was given.
+  /*
+   * The commission comes back with the bet.
+   *
+   * It is paid for one decision at a time - up front when the bet goes up,
+   * and out of each win that leaves it standing - so a bet coming down has
+   * always prepaid one decision that never happened. Keeping it would charge a
+   * player for a roll they were not in, and make the bet cost more than the
+   * 4.76% the table quotes for it.
+   */
+  returned += bet.vig ?? 0
+
   return { ...state, bets, bankroll: state.bankroll + returned, refused: null }
 }
 
@@ -158,12 +210,10 @@ export function takeDown(state, id) {
  * than refused - the player asked for everything that can come down, and being
  * told the pass line is staying is not news.
  *
- * The bonus row is stepped over too, and that one is a deliberate rule rather
- * than a convenience. Every other bet here can go straight back up on the next
- * throw; Little, Big and Boom only go up on a clean board, so taking one down
- * mid-shooter ends it until somebody sevens out. One button that empties the
- * felt should not also be the one button that cannot be undone. The × on a
- * single bet still comes down, because that is a decision about that bet.
+ * The bonus row is stepped over too. Once the shooter is under way it is a
+ * contract and cannot come down at all; before the first throw it can, but
+ * only by the × on the bet itself, because that is a decision about that bet
+ * and a tidy-up is not.
  */
 export function sweep(state) {
   let next = state
@@ -264,10 +314,14 @@ export function regress(state, id) {
   if (bet.amount <= base) {
     return refuse(state, `${betDef(id).label} is already at ${money(base)}.`)
   }
+  // A smaller buy or lay owes a smaller commission on its next decision, and
+  // the difference comes back with the chips.
+  const vig = betDef(id).vig ? Math.min(bet.vig ?? 0, vigFor(id, base, { table: state.table })) : bet.vig
+  const refund = (bet.vig ?? 0) - (vig ?? 0)
   return {
     ...state,
-    bets: { ...state.bets, [id]: { ...bet, amount: base } },
-    bankroll: state.bankroll + (bet.amount - base),
+    bets: { ...state.bets, [id]: { ...bet, amount: base, ...(vig !== undefined ? { vig } : {}) } },
+    bankroll: state.bankroll + (bet.amount - base) + refund,
     refused: null,
   }
 }
@@ -289,6 +343,7 @@ function applyRoll(state, roll) {
   return {
     ...next,
     refused: null,
+    pending: null,
     lastRoll: roll,
     lastEvents: events,
     history: [...(state.history ?? []), roll].slice(-200),
@@ -309,7 +364,7 @@ function applyRoll(state, roll) {
 export function wouldPay(state, id) {
   const bet = state.bets[id]
   if (!bet) return []
-  return quote(id, bet.amount, { point: state.point, marked: state.marked })
+  return quote(id, bet.amount, { point: state.point, marked: state.marked, bonus: bet.paytable ?? state.table?.bonus })
 }
 
 export const isBetWorking = (state, id) =>

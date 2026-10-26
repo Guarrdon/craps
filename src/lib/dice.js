@@ -411,8 +411,10 @@ function separate(a, b) {
  *
  * Returns the frames to play back and the result, which is `want`. If it were
  * ever anything else this module would be broken, and the test says so.
+ * `tries` is only ever lowered by that test, which has to be able to see what
+ * happens when the throw runs out of them.
  */
-export function throwDice(rng, want) {
+export function throwDice(rng, want, { tries = 12 } = {}) {
   let start = initial(rng)
 
   /*
@@ -431,10 +433,12 @@ export function throwDice(rng, want) {
    * asserted over it: what you watch land is what you get paid for, always.
    * Two passes is the usual cost and the loop almost never goes round again.
    */
-  for (let attempt = 0; attempt < 12; attempt++) {
+  let last = null
+  for (let attempt = 0; attempt < tries; attempt++) {
     const dice = start.map((d) => ({ ...d, p: [...d.p], v: [...d.v], q: [...d.q], w: [...d.w] }))
     const frames = simulate(dice)
     const got = [topFace(dice[0].q), topFace(dice[1].q)]
+    last = { dice, frames, got }
 
     if (got[0] === want[0] && got[1] === want[1]) {
       return {
@@ -454,7 +458,29 @@ export function throwDice(rng, want) {
         : start.map((d, i) => ({ ...d, q: qnorm(qmul(d.q, symmetryTaking(want[i], got[i]))) }))
   }
 
-  throw new Error(`the dice would not land on ${want.join('-')}`)
+  /*
+   * A throw that would not converge still lands on what was drawn.
+   *
+   * It has never been seen to happen - 180,000 throws, three passes at most -
+   * but if it did, the alternative to this is an error, and an error in the
+   * middle of a throw is a roll that gets drawn again. Redrawing only the
+   * throws that are hard to land would make those results rarer than one in
+   * thirty six, which is a bias however small it is. So the last throw is
+   * played back as it fell and each die is turned to the drawn face as it comes
+   * to rest: one frame of a die settling the other way up, and a fair result.
+   */
+  const { dice, frames, got } = last
+  dice.forEach((d, i) => {
+    d.q = qnorm(qmul(d.q, symmetryTaking(want[i], got[i])))
+  })
+  frames[frames.length - 1] = dice.map((d) => ({ p: [...d.p], q: [...d.q] }))
+  return {
+    frames,
+    result: { a: topFace(dice[0].q), b: topFace(dice[1].q) },
+    resting: dice.map((d) => ({ p: [...d.p], q: [...d.q] })),
+    attempts: tries,
+    forced: true,
+  }
 }
 
 // The same throw with no twist, for the test that wants to see what the

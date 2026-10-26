@@ -202,4 +202,29 @@ function spread(frames) {
   return total / 2
 }
 
+// --------------------------------------------- a throw that will not converge
+
+/*
+ * Out of attempts, the dice still land on what was drawn.
+ *
+ * The alternative is an error, and an error mid-throw is a roll that gets drawn
+ * again - which would make the hard-to-land results rarer than one in thirty
+ * six. One attempt is not enough for most results, so this forces the fallback
+ * and checks it lands exactly where it was told to, on the frame shown last.
+ */
+{
+  let forced = 0
+  let wrong = 0
+  for (let i = 0; i < 360; i++) {
+    const want = [(i % 6) + 1, (Math.floor(i / 6) % 6) + 1]
+    const t = throwDice(makeRng(9000 + i), want, { tries: 1 })
+    if (t.forced) forced++
+    const last = t.frames[t.frames.length - 1]
+    if (t.result.a !== want[0] || t.result.b !== want[1]) wrong++
+    if (topFace(last[0].q) !== want[0] || topFace(last[1].q) !== want[1]) wrong++
+  }
+  check('one attempt is not enough for most throws, so the fallback is exercised', forced > 200, `${forced} of 360`)
+  eq('and every one of them still shows and pays what was drawn', wrong, 0)
+}
+
 done('dice')

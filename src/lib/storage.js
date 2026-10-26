@@ -58,6 +58,10 @@ export const packTable = (state) => ({
   bankroll: state.bankroll,
   table: state.table,
   history: (state.history ?? []).slice(-40),
+  // A roll that has been drawn and not yet paid. Saved the moment it is drawn,
+  // so that closing the tab while the dice are in the air settles the roll on
+  // the way back in rather than throwing it away.
+  pending: state.pending ?? null,
 })
 
 export const unpackTable = (raw) => ({

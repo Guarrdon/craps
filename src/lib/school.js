@@ -15,7 +15,7 @@
 
 import { ALL_ROLLS, HARDWAY_PAYS, LAY_ODDS, PLACE_PAYS, TRUE_ODDS, betDef, quote, settle } from './bets.js'
 import { BONUS_CHANCE, BONUS_PAYTABLES, EDGES, asPercent, bonusEdge } from './edges.js'
-import { DEFAULT_TABLE, rangeFor, unitFor } from './limits.js'
+import { DEFAULT_TABLE, rangeFor, unitFor, vigEdge, vigFor } from './limits.js'
 import { money } from './bank.js'
 
 const gcd = (a, b) => (b ? gcd(b, a % b) : a)
@@ -349,7 +349,23 @@ function playOf(id, table) {
       ? `Wants ${money(Math.max(min, step))} and moves in ${money(step)} steps, so it can be paid in whole dollars.`
       : `Minimum ${money(min)}.`,
   )
-  if (d.vig) out.push('Carries a 5% commission, charged when it goes up.')
+  if (d.vig) {
+    out.push(
+      `Carries a 5% commission on ${d.vig === 'win' ? 'what it would win' : 'the bet'}, a dollar at least and rounded down. ` +
+        'Paid when it goes up, and again out of every win that leaves it standing — each decision pays its own. ' +
+        'Taken down before it is decided, the commission comes back.',
+    )
+    // The quoted edge is for a commission of exactly five per cent. Say what
+    // it is at the size most people bet, because the dollar floor moves it.
+    const small = Math.ceil(Math.max(min, step) / step) * step
+    const at = vigEdge(id, small, { table })
+    if (Math.abs(at - EDGES[id]) > 0.01) {
+      out.push(
+        `The ${asPercent(EDGES[id])} is for a commission of exactly 5%. At ${money(small)} it is ` +
+          `${money(vigFor(id, small, { table }))}, which makes it ${asPercent(at)}.`,
+      )
+    }
+  }
   return out
 }
 

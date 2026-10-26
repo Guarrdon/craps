@@ -2,6 +2,7 @@ import { check, done, near } from './harness.js'
 import { ALL_ROLLS, BET_IDS, LAY_ODDS, POINTS, betDef, settle } from '../src/lib/bets.js'
 import { BONUS_CHANCE, BONUS_PAYTABLES, EDGES, bonusEdge, chanceOfAll } from '../src/lib/edges.js'
 import { DEFAULT_TABLE, unitFor, vigFor } from '../src/lib/limits.js'
+import { newTable, placeBet, railTotal, reducer } from '../src/lib/table.js'
 
 /*
  * The audit.
@@ -163,6 +164,85 @@ check('and 31 sits between the other two', bonusEdge('little', '31') < bonusEdge
 // number before a seven, which is a fraction anybody can do in their head.
 near('the chance of a two before a seven is one in seven', chanceOfAll([2]), 1 / 7, 1e-12)
 near('and a six before a seven is five in eleven', chanceOfAll([6]), 5 / 11, 1e-12)
+
+// ------------------------------------------- a buy or lay left up for life
+
+/*
+ * The figures above are per decision, with one commission each. This asks the
+ * engine whether that is what a player actually pays when they do what nearly
+ * everybody does: put the bet up and leave it there through every win until
+ * a decision finally takes it.
+ *
+ * Exact, not sampled. The bet's whole future is a handful of table states -
+ * coming out, or one of six points - and value iteration over all thirty six
+ * throws from each one converges to the expectation. The commission on every
+ * decision is counted as part of what was wagered on it, which is how the
+ * published figures count it.
+ */
+function leftUp(id, stake) {
+  const opening = { ...newTable(), phase: 'point', point: id.endsWith('-4') ? 5 : 4, bankroll: 1e9 }
+  const placed = placeBet(opening, id, stake)
+  const firstVig = opening.bankroll - placed.bankroll - stake
+  // Working on the come-out too, so every throw is one it is exposed to.
+  const start = { ...placed, bets: { [id]: { ...placed.bets[id], working: true } } }
+  const key = (s) => `${s.phase}|${s.point}|${s.bets[id]?.vig ?? '-'}`
+
+  const nodes = new Map()
+  const queue = [start]
+  nodes.set(key(start), { s: start })
+  while (queue.length) {
+    const s = queue.pop()
+    const node = nodes.get(key(s))
+    node.next = ALL_ROLLS.map((r) => {
+      const n = reducer({ ...s, marked: new Set() }, { type: 'roll', roll: r })
+      const e = n.lastEvents.find((x) => x.id === id && ['pay', 'take'].includes(x.kind))
+      const out = {
+        gain: railTotal(n) - railTotal(s),
+        decided: e ? 1 : 0,
+        vig: e?.vig ?? 0,
+        over: !n.bets[id],
+        k: key(n),
+      }
+      if (!out.over && !nodes.has(out.k)) {
+        nodes.set(out.k, { s: n })
+        queue.push(n)
+      }
+      return out
+    })
+  }
+
+  let v = new Map([...nodes.keys()].map((k) => [k, [0, 0, 0]]))
+  for (let i = 0; i < 4000; i++) {
+    const w = new Map()
+    for (const [k, node] of nodes) {
+      const sum = [0, 0, 0]
+      for (const t of node.next) {
+        const after = t.over ? [0, 0, 0] : v.get(t.k)
+        sum[0] += t.gain + after[0]
+        sum[1] += t.decided + after[1]
+        sum[2] += t.vig + after[2]
+      }
+      w.set(k, sum.map((x) => x / 36))
+    }
+    v = w
+  }
+  const [gain, decisions, vigs] = v.get(key(start))
+  const profit = gain - firstVig
+  const wagered = decisions * stake + firstVig + vigs
+  return { edge: (-profit / wagered) * 100, decisions }
+}
+
+for (const id of BET_IDS.filter((x) => betDef(x).vig)) {
+  const { edge, decisions } = leftUp(id, stakeFor(id))
+  near(
+    `${betDef(id).label} left up costs ${EDGES[id].toFixed(3)}% a decision, over ${decisions.toFixed(2)} of them`,
+    edge,
+    EDGES[id],
+    // EDGES is published to three decimals; the engine lands on the exact
+    // figure, so the only gap allowed is that rounding.
+    0.0005,
+  )
+}
 
 // ----------------------------------------------------- nothing is a giveaway
 

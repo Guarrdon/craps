@@ -19,7 +19,7 @@ import { BET_IDS, LAY_ODDS, betDef } from '../src/lib/bets.js'
 import { EDGES } from '../src/lib/edges.js'
 import { DEFAULT_TABLE, maxBet, rangeFor, unitFor as unitOf } from '../src/lib/limits.js'
 import { makeRng } from '../src/lib/rng.js'
-import { newTable, placeBet, reducer, takeDown } from '../src/lib/table.js'
+import { newTable, placeBet, reducer } from '../src/lib/table.js'
 
 const args = process.argv.slice(2)
 const flag = (name, fallback) => {
@@ -59,10 +59,13 @@ const EXPECTED = Object.fromEntries(Object.entries(EDGES).filter(([id]) => !SKIP
  * nothing. Leaving the push out gives 1.403% for the don't side instead of the
  * 1.364% every source quotes, which is a real difference and not a rounding.
  *
- * Bets that carry a commission are taken down and put back up after every
- * decision, so each resolution pays its own vig. That is the arrangement the
- * published buy and lay figures assume, and it is what a player who is paying
- * attention actually does.
+ * Bets that carry a commission are left up, the way nearly everybody plays
+ * them. Each decision still pays its own vig - up front for the first, out of
+ * the payout for every win that leaves the bet standing - and that commission
+ * is counted as part of what was wagered on the decision it paid for. An
+ * earlier version of this took the bet down and put it back after every
+ * decision, which measured the published figure and hid the fact that the
+ * engine was only ever charging the first one.
  */
 function measure(id, rolls, seed) {
   const d = betDef(id)
@@ -103,16 +106,10 @@ function measure(id, rolls, seed) {
     if (!s.bets[box]) s = placeBet(s, box, DEFAULT_TABLE.min)
   }
 
+  // The commission already paid for the next decision on this bet.
   let vigPaid = 0
-  let justDecided = false
 
   for (let i = 0; i < rolls; i++) {
-    // A bet that carries a commission is refreshed after every decision, so
-    // each resolution pays its own vig. Leaving a winning buy up would have it
-    // decide several times on one commission, and the published figures - and
-    // the way the bet is actually played - assume one each.
-    if (d.vig && justDecided && s.bets[id]) s = takeDown(s, id)
-
     prop()
 
     if (!familyUp()) {
@@ -126,7 +123,6 @@ function measure(id, rolls, seed) {
     }
 
     s = reducer(s, { type: 'roll', roll: rng.roll() })
-    justDecided = false
 
     for (const e of s.lastEvents ?? []) {
       if (!family.includes(e.id)) continue
@@ -140,18 +136,18 @@ function measure(id, rolls, seed) {
        * it is counted, at zero.
        */
       if (!['pay', 'take', 'push'].includes(e.kind)) continue
+      // A win that stays up has already paid the next decision's commission
+      // out of its payout. That belongs to the next decision, not this one.
+      const next = e.vig ?? 0
       const stake = e.amount + vigPaid
-      const profit = (e.kind === 'pay' ? e.pay : e.kind === 'push' ? 0 : -e.amount) - vigPaid
+      const profit = (e.kind === 'pay' ? e.pay + next : e.kind === 'push' ? 0 : -e.amount) - vigPaid
       wagered += stake
       net += profit
       sumP += profit / stake // as a fraction of the stake, so mixed sizes compose
       sumP2 += (profit / stake) ** 2
       n++
-      justDecided = true
+      vigPaid = s.bets[id] ? next : 0
     }
-    // The commission belongs to the bet it was paid on. Once that bet has been
-    // decided and taken off, the next one pays its own.
-    if (justDecided && !s.bets[id]) vigPaid = 0
 
     if (s.bankroll < BANK / 2) s = { ...s, bankroll: s.bankroll + BANK }
   }
